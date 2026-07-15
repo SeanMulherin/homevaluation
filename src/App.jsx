@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   BarChart3,
@@ -124,6 +124,8 @@ function InputStepper({ label, value, min, max, step, suffix, onChange }) {
 }
 
 function App() {
+  const requestSequence = useRef(0);
+  const initialLoadStarted = useRef(false);
   const [query, setQuery] = useState(defaultSearchAddress);
   const [dashboard, setDashboard] = useState(sampleDashboard);
   const [isLoading, setIsLoading] = useState(true);
@@ -173,10 +175,12 @@ function App() {
   const analyzeAddress = async (address, initial = false) => {
     const normalized = address.trim();
     if (!normalized) return;
+    const requestId = ++requestSequence.current;
     setIsLoading(true);
     setLoadError('');
     try {
       const nextDashboard = await fetchAddressAnalysis(normalized);
+      if (requestId !== requestSequence.current) return;
       setDashboard(nextDashboard);
       setScenario({
         beds: nextDashboard.subject.beds,
@@ -189,19 +193,23 @@ function App() {
       setNotice(initial ? '' : `Analysis updated for ${nextDashboard.subject.address}.`);
       if (!initial) setTimeout(() => setNotice(''), 3600);
     } catch (error) {
-      setLoadError(error.message || 'Address analysis could not be loaded.');
+      if (requestId === requestSequence.current) {
+        setLoadError(error.message || 'Address analysis could not be loaded.');
+      }
     } finally {
-      setIsLoading(false);
+      if (requestId === requestSequence.current) setIsLoading(false);
     }
   };
 
   useEffect(() => {
+    if (initialLoadStarted.current) return;
+    initialLoadStarted.current = true;
     void analyzeAddress(defaultSearchAddress, true);
   }, []);
 
   const resetScenario = () => {
     setScenario({ beds: currentSubject.beds, baths: currentSubject.baths, squareFeet: currentSubject.squareFeet, acres: currentSubject.acres, yearBuilt: currentSubject.yearBuilt });
-    setQuery(defaultSearchAddress);
+    setQuery(currentSubject.address);
     setNotice('Property characteristics restored.');
   };
 
@@ -353,7 +361,7 @@ function App() {
                       <ReferenceArea y1={estimateLow} y2={estimateHigh} fill="#d9b45b" fillOpacity={0.13} />
                       <ReferenceLine y={estimate} stroke="#b7433f" strokeDasharray="6 5" label={{ value: `Subject ${compactMoney.format(estimate)}`, fill: '#8d302d', fontSize: 11, position: 'insideTopRight' }} />
                       <Scatter name="Comparables" data={compChartData} fill="#365b50" isAnimationActive={false}>
-                        {compChartData.map((comp) => <Cell key={comp.address} fill={comp.status === 'Active' ? '#d18b35' : '#5f746d'} />)}
+                        {compChartData.map((comp) => <Cell key={`${currentSubject.address}-${comp.fullAddress || comp.address}`} fill={comp.status === 'Active' ? '#d18b35' : '#5f746d'} />)}
                       </Scatter>
                       <Scatter name="Subject" data={[{ address: 'Subject property', price: estimate, sqft: scenario.squareFeet, beds: scenario.beds, baths: scenario.baths, distance: 0, fit: 1 }]} fill="#b7433f" shape="diamond" isAnimationActive={false} />
                     </ScatterChart>
@@ -368,7 +376,7 @@ function App() {
                       <ReferenceArea x1={estimateLow} x2={estimateHigh} fill="#d9b45b" fillOpacity={0.13} />
                       <ReferenceLine x={estimate} stroke="#b7433f" strokeWidth={2} />
                       <Bar dataKey="price" radius={[0, 3, 3, 0]} barSize={13} isAnimationActive={false}>
-                        {[...compChartData].sort((a, b) => a.price - b.price).map((comp) => <Cell key={comp.address} fill={comp.status === 'Active' ? '#d18b35' : '#5f746d'} />)}
+                        {[...compChartData].sort((a, b) => a.price - b.price).map((comp) => <Cell key={`${currentSubject.address}-${comp.fullAddress || comp.address}`} fill={comp.status === 'Active' ? '#d18b35' : '#5f746d'} />)}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -392,7 +400,7 @@ function App() {
               <table>
                 <thead><tr><th>Comparable property</th><th>Status</th><th>Price</th><th>Price / sqft</th><th>Beds / baths</th><th>Living area</th><th>Distance</th><th>Fit</th></tr></thead>
                 <tbody>{compChartData.length ? compChartData.map((comp) => (
-                  <tr key={comp.address}>
+                  <tr key={`${currentSubject.address}-${comp.fullAddress || comp.address}`}>
                     <td><strong>{comp.address}</strong><span>{comp.location || currentMarket.location}</span></td>
                     <td><span className={`status-pill status-pill--${comp.status.toLowerCase()}`}>{comp.status}</span></td>
                     <td>{money.format(comp.price)}</td><td>{money.format(comp.ppsf)}</td><td>{comp.beds} / {comp.baths.toFixed(1)}</td><td>{number.format(comp.sqft)} sqft</td><td>{comp.distance.toFixed(2)} mi</td><td><span className="fit-score">{(comp.fit * 100).toFixed(0)}%</span></td>
