@@ -49,6 +49,7 @@ import { scenarioEstimate, sliceHistory, summarizeComparables } from './analytic
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const compactMoney = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 });
 const number = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+const defaultSearchAddress = '1600 Pennsylvania Avenue NW, Washington, DC 20500';
 
 function Metric({ label, value, detail, tone = 'default', icon: Icon }) {
   return (
@@ -105,7 +106,7 @@ function InputStepper({ label, value, min, max, step, suffix, onChange }) {
 }
 
 function App() {
-  const [query, setQuery] = useState(subject.address);
+  const [query, setQuery] = useState(defaultSearchAddress);
   const [displayAddress, setDisplayAddress] = useState(subject.address);
   const [scenario, setScenario] = useState({
     beds: subject.beds,
@@ -147,7 +148,7 @@ function App() {
 
   const resetScenario = () => {
     setScenario({ beds: subject.beds, baths: subject.baths, squareFeet: subject.squareFeet, acres: subject.acres, yearBuilt: subject.yearBuilt });
-    setQuery(subject.address);
+    setQuery(defaultSearchAddress);
     setDisplayAddress(subject.address);
     setNotice('Sample property restored.');
   };
