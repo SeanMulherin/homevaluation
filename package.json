@@ -1,0 +1,35 @@
+{
+  "name": "housing-market-lab",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vinext dev",
+    "build": "vinext build",
+    "start": "vinext start",
+    "check:vinext": "vinext check",
+    "test": "vitest run --config vitest.config.js"
+  },
+  "dependencies": {
+    "@vinext/cloudflare": "^1.0.0-beta.1",
+    "lucide-react": "^0.468.0",
+    "next": "^16.0.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-is": "^19.2.6",
+    "recharts": "^3.1.2"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.45.0",
+    "@vitejs/plugin-react": "latest",
+    "@vitejs/plugin-rsc": "latest",
+    "react-server-dom-webpack": "^19.2.6",
+    "vinext": "latest",
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10",
+    "wrangler": "latest"
+  },
+  "overrides": {
+    "postcss": "^8.5.10"
+  }
+}

@@ -1,0 +1,11 @@
+node_modules
+dist/
+.next/
+.open-next/
+.wrangler/
+.vinext/
+next-env.d.ts
+.DS_Store
+.env
+.env.*
+*.log
