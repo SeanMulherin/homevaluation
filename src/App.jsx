@@ -141,7 +141,6 @@ function App() {
   const [showSubjectIndex, setShowSubjectIndex] = useState(true);
   const [compStatus, setCompStatus] = useState('All');
   const [compView, setCompView] = useState('scatter');
-  const [activeSection, setActiveSection] = useState('overview');
   const [notice, setNotice] = useState('');
 
   const currentSubject = dashboard.subject;
@@ -246,15 +245,8 @@ function App() {
           <span className="brand__mark"><Home size={19} strokeWidth={2.2} /></span>
           <span>Housing Market Lab</span>
         </a>
-        <nav className="topnav" aria-label="Dashboard sections">
-          {['overview', 'market', 'comparables'].map((section) => (
-            <button key={section} className={activeSection === section ? 'is-active' : ''} onClick={() => { setActiveSection(section); document.getElementById(section)?.scrollIntoView({ behavior: 'smooth' }); }}>
-              {section}
-            </button>
-          ))}
-        </nav>
         <a className="portfolio-link" href="https://seanmulherin.github.io/" target="_blank" rel="noreferrer">
-          Portfolio <ExternalLink size={14} />
+          SM Portfolio Home <ExternalLink size={14} />
         </a>
       </header>
 

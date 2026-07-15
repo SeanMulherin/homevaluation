@@ -39,10 +39,7 @@ button { cursor: pointer; }
 }
 .brand { display: flex; align-items: center; gap: 10px; color: white; text-decoration: none; font-weight: 750; white-space: nowrap; }
 .brand__mark { width: 34px; height: 34px; display: grid; place-items: center; background: #e7b05f; color: #17241f; border-radius: 5px; }
-.topnav { display: flex; align-self: stretch; margin-left: auto; }
-.topnav button { color: #bdc8c2; background: transparent; border: 0; border-bottom: 2px solid transparent; padding: 0 16px; text-transform: capitalize; font-size: 13px; }
-.topnav button:hover, .topnav button.is-active { color: white; border-bottom-color: #e7b05f; }
-.portfolio-link { display: inline-flex; gap: 6px; align-items: center; color: white; text-decoration: none; font-size: 13px; font-weight: 650; padding-left: 18px; border-left: 1px solid #43524c; white-space: nowrap; }
+.portfolio-link { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; color: white; text-decoration: none; font-size: 13px; font-weight: 650; padding-left: 18px; border-left: 1px solid #43524c; white-space: nowrap; }
 
 .workspace-header { min-height: 146px; padding: 28px clamp(18px, 3vw, 46px); display: grid; grid-template-columns: minmax(260px, 1fr) minmax(360px, 620px); align-items: center; gap: 28px; background: var(--surface); border-bottom: 1px solid var(--line); position: relative; }
 .workspace-header__copy h1 { font-size: clamp(25px, 3vw, 38px); line-height: 1.1; margin: 7px 0 9px; letter-spacing: 0; }
@@ -184,8 +181,6 @@ tbody tr:hover { background: #fbfcfa; }
 }
 
 @media (max-width: 980px) {
-  .topnav { display: none; }
-  .portfolio-link { margin-left: auto; }
   .workspace-header { grid-template-columns: 1fr; gap: 18px; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .scenario-panel { position: static; }
@@ -198,10 +193,10 @@ tbody tr:hover { background: #fbfcfa; }
 }
 
 @media (max-width: 720px) {
-  .topbar { height: 56px; padding: 0 15px; }
+  .topbar { height: 56px; gap: 14px; padding: 0 15px; }
   .brand span:last-child { font-size: 14px; }
-  .portfolio-link { font-size: 0; padding-left: 12px; }
-  .portfolio-link svg { width: 18px; height: 18px; }
+  .portfolio-link { font-size: 11px; padding-left: 12px; }
+  .portfolio-link svg { width: 15px; height: 15px; }
   .workspace-header { padding: 22px 15px 28px; }
   .workspace-header__copy h1 { font-size: 28px; }
   .address-search { height: auto; min-height: 48px; display: grid; grid-template-columns: auto 1fr; padding: 8px 8px 8px 13px; }
@@ -230,6 +225,10 @@ tbody tr:hover { background: #fbfcfa; }
   .facts-grid > div:nth-child(even) { border-right: 0; }
   .footer { flex-direction: column; align-items: flex-start; }
   .footer p { text-align: left; }
+}
+
+@media (max-width: 420px) {
+  .brand span:last-child { display: none; }
 }
 
 @media (max-width: 430px) {
