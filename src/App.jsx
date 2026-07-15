@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   BarChart3,
@@ -43,13 +43,31 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { comparables, marketHistory, subject } from './data';
+import { comparables as sampleComparables, marketHistory as sampleHistory, subject as sampleSubject } from './data';
 import { scenarioEstimate, sliceHistory, summarizeComparables } from './analytics';
+import { fetchAddressAnalysis } from './api';
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const compactMoney = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 });
 const number = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+const moneyOrUnavailable = (value, compact = false) => (
+  Number.isFinite(value) && value > 0 ? (compact ? compactMoney : money).format(value) : 'Not available'
+);
 const defaultSearchAddress = '1600 Pennsylvania Avenue NW, Washington, DC 20500';
+const sampleDashboard = {
+  subject: {
+    ...sampleSubject,
+    propertyType: 'Single Family',
+    valuationSource: 'RentCast AVM',
+  },
+  market: {
+    location: 'Wilmington, NC',
+    primaryLabel: '3-bedroom segment',
+    history: sampleHistory,
+  },
+  comparables: sampleComparables,
+  warnings: [],
+};
 
 function Metric({ label, value, detail, tone = 'default', icon: Icon }) {
   return (
@@ -107,13 +125,15 @@ function InputStepper({ label, value, min, max, step, suffix, onChange }) {
 
 function App() {
   const [query, setQuery] = useState(defaultSearchAddress);
-  const [displayAddress, setDisplayAddress] = useState(subject.address);
+  const [dashboard, setDashboard] = useState(sampleDashboard);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [scenario, setScenario] = useState({
-    beds: subject.beds,
-    baths: subject.baths,
-    squareFeet: subject.squareFeet,
-    acres: subject.acres,
-    yearBuilt: subject.yearBuilt,
+    beds: sampleSubject.beds,
+    baths: sampleSubject.baths,
+    squareFeet: sampleSubject.squareFeet,
+    acres: sampleSubject.acres,
+    yearBuilt: sampleSubject.yearBuilt,
   });
   const [historyRange, setHistoryRange] = useState(10);
   const [showSubjectIndex, setShowSubjectIndex] = useState(true);
@@ -122,43 +142,72 @@ function App() {
   const [activeSection, setActiveSection] = useState('overview');
   const [notice, setNotice] = useState('');
 
-  const estimate = useMemo(() => scenarioEstimate(subject, scenario), [scenario]);
-  const rangeOffset = (subject.high - subject.low) / 2;
+  const currentSubject = dashboard.subject;
+  const currentMarket = dashboard.market;
+  const estimate = useMemo(() => scenarioEstimate(currentSubject, scenario), [currentSubject, scenario]);
+  const rangeOffset = Math.max(0, (currentSubject.high - currentSubject.low) / 2);
   const estimateLow = estimate - rangeOffset;
   const estimateHigh = estimate + rangeOffset;
   const filteredComps = useMemo(
-    () => comparables.filter((comp) => compStatus === 'All' || comp.status === compStatus),
-    [compStatus],
+    () => dashboard.comparables.filter((comp) => compStatus === 'All' || comp.status === compStatus),
+    [dashboard.comparables, compStatus],
   );
   const compSummary = useMemo(
     () => summarizeComparables(filteredComps, estimate, scenario.squareFeet),
     [filteredComps, estimate, scenario.squareFeet],
   );
   const history = useMemo(() => {
-    const sliced = sliceHistory(marketHistory, historyRange);
-    const latestBedroom = marketHistory.at(-1).bedroom;
+    const sliced = sliceHistory(currentMarket.history, historyRange);
+    const latestBedroom = currentMarket.history.at(-1)?.bedroom || currentSubject.marketBenchmark || 1;
     return sliced.map((point) => ({
       ...point,
       subjectIndex: Math.round(point.bedroom * (estimate / latestBedroom)),
     }));
-  }, [historyRange, estimate]);
-  const premium = ((estimate / subject.marketBenchmark) - 1) * 100;
-  const fiveYearHistory = sliceHistory(marketHistory, 5);
-  const fiveYearChange = ((fiveYearHistory.at(-1).city / fiveYearHistory[0].city) - 1) * 100;
+  }, [currentMarket.history, currentSubject.marketBenchmark, historyRange, estimate]);
+  const premium = currentSubject.marketBenchmark ? ((estimate / currentSubject.marketBenchmark) - 1) * 100 : 0;
+  const fiveYearHistory = sliceHistory(currentMarket.history, 5);
+  const fiveYearChange = fiveYearHistory.length > 1
+    ? ((fiveYearHistory.at(-1).city / fiveYearHistory[0].city) - 1) * 100
+    : 0;
+
+  const analyzeAddress = async (address, initial = false) => {
+    const normalized = address.trim();
+    if (!normalized) return;
+    setIsLoading(true);
+    setLoadError('');
+    try {
+      const nextDashboard = await fetchAddressAnalysis(normalized);
+      setDashboard(nextDashboard);
+      setScenario({
+        beds: nextDashboard.subject.beds,
+        baths: nextDashboard.subject.baths,
+        squareFeet: nextDashboard.subject.squareFeet,
+        acres: nextDashboard.subject.acres,
+        yearBuilt: nextDashboard.subject.yearBuilt,
+      });
+      setCompStatus('All');
+      setNotice(initial ? '' : `Analysis updated for ${nextDashboard.subject.address}.`);
+      if (!initial) setTimeout(() => setNotice(''), 3600);
+    } catch (error) {
+      setLoadError(error.message || 'Address analysis could not be loaded.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void analyzeAddress(defaultSearchAddress, true);
+  }, []);
 
   const resetScenario = () => {
-    setScenario({ beds: subject.beds, baths: subject.baths, squareFeet: subject.squareFeet, acres: subject.acres, yearBuilt: subject.yearBuilt });
+    setScenario({ beds: currentSubject.beds, baths: currentSubject.baths, squareFeet: currentSubject.squareFeet, acres: currentSubject.acres, yearBuilt: currentSubject.yearBuilt });
     setQuery(defaultSearchAddress);
-    setDisplayAddress(subject.address);
-    setNotice('Sample property restored.');
+    setNotice('Property characteristics restored.');
   };
 
   const runAnalysis = (event) => {
     event.preventDefault();
-    const normalized = query.trim() || subject.address;
-    setDisplayAddress(normalized);
-    setNotice(normalized === subject.address ? 'Sample analysis refreshed.' : 'Scenario updated using the Wilmington sample market model.');
-    setTimeout(() => setNotice(''), 3600);
+    void analyzeAddress(query);
   };
 
   const compChartData = filteredComps.map((comp) => ({
@@ -166,12 +215,21 @@ function App() {
     shortAddress: comp.address.length > 22 ? `${comp.address.slice(0, 21)}...` : comp.address,
     ppsf: Math.round(comp.price / comp.sqft),
   }));
-  const compMinimum = Math.min(...filteredComps.map((comp) => comp.price));
-  const compMaximum = Math.max(...filteredComps.map((comp) => comp.price));
+  const compMinimum = filteredComps.length ? Math.min(...filteredComps.map((comp) => comp.price)) : estimate;
+  const compMaximum = filteredComps.length ? Math.max(...filteredComps.map((comp) => comp.price)) : estimate;
   const compRangePosition = Math.max(
     2,
-    Math.min(98, ((estimate - compMinimum) / (compMaximum - compMinimum)) * 100),
+    Math.min(98, compMaximum === compMinimum ? 50 : ((estimate - compMinimum) / (compMaximum - compMinimum)) * 100),
   );
+  const nearestDistance = filteredComps.length
+    ? Math.min(...filteredComps.map((comp) => comp.distance))
+    : null;
+  const fitScores = filteredComps.map((comp) => comp.fit).filter((value) => value > 0);
+  const fitRange = fitScores.length
+    ? `${Math.min(...fitScores).toFixed(2)} to ${Math.max(...fitScores).toFixed(2)}`
+    : 'Not available';
+  const premiumLabel = `${premium >= 0 ? '+' : ''}${premium.toFixed(1)}%`;
+  const fiveYearLabel = `${fiveYearChange >= 0 ? '+' : ''}${fiveYearChange.toFixed(1)}%`;
 
   return (
     <main className="app-shell">
@@ -194,17 +252,18 @@ function App() {
 
       <section className="workspace-header" id="overview">
         <div className="workspace-header__copy">
-          <div className="eyebrow"><span className="status-dot" /> Interactive sample analysis</div>
+          <div className="eyebrow"><span className="status-dot" /> Address-level market analysis</div>
           <h1>Single-family home valuation</h1>
-          <p>{displayAddress}</p>
         </div>
         <form className="address-search" onSubmit={runAnalysis}>
           <MapPin size={18} aria-hidden="true" />
           <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Property address" placeholder="Enter a U.S. property address" />
-          <button type="submit"><Search size={17} />Analyze</button>
+          <button type="submit" disabled={isLoading}>{isLoading ? <RefreshCw className="is-spinning" size={17} /> : <Search size={17} />}{isLoading ? 'Analyzing' : 'Analyze'}</button>
         </form>
         {notice && <div className="toast" role="status"><Check size={16} />{notice}</div>}
       </section>
+
+      {loadError && <div className="load-alert" role="alert"><Info size={17} /><span>{loadError}</span></div>}
 
       <div className="dashboard-grid">
         <aside className="scenario-panel" aria-label="Property scenario controls">
@@ -212,34 +271,34 @@ function App() {
             <div><span className="eyebrow">Subject profile</span><h2>Adjust the home</h2></div>
             <button className="icon-button" onClick={resetScenario} title="Reset property scenario" aria-label="Reset property scenario"><RefreshCw size={17} /></button>
           </div>
-          <div className="property-type"><Building2 size={17} /><span><small>Property type</small>Single Family</span><ChevronDown size={15} /></div>
+          <div className="property-type"><Building2 size={17} /><span><small>Property type</small>{currentSubject.propertyType}</span><ChevronDown size={15} /></div>
           <div className="control-grid">
             <InputStepper label="Bedrooms" value={scenario.beds} min={1} max={8} step={1} suffix="beds" onChange={(value) => setScenario({ ...scenario, beds: value })} />
-            <InputStepper label="Bathrooms" value={scenario.baths} min={1} max={8} step={0.5} suffix="baths" onChange={(value) => setScenario({ ...scenario, baths: value })} />
-            <InputStepper label="Living area" value={scenario.squareFeet} min={500} max={8000} step={50} suffix="sqft" onChange={(value) => setScenario({ ...scenario, squareFeet: value })} />
-            <InputStepper label="Lot size" value={scenario.acres} min={0.03} max={10} step={0.01} suffix="acres" onChange={(value) => setScenario({ ...scenario, acres: value })} />
-            <InputStepper label="Year built" value={scenario.yearBuilt} min={1800} max={2026} step={1} suffix="year" onChange={(value) => setScenario({ ...scenario, yearBuilt: value })} />
+            <InputStepper label="Bathrooms" value={scenario.baths} min={1} max={50} step={0.5} suffix="baths" onChange={(value) => setScenario({ ...scenario, baths: value })} />
+            <InputStepper label="Living area" value={scenario.squareFeet} min={500} max={100000} step={50} suffix="sqft" onChange={(value) => setScenario({ ...scenario, squareFeet: value })} />
+            <InputStepper label="Lot size" value={scenario.acres} min={0.03} max={100} step={0.01} suffix="acres" onChange={(value) => setScenario({ ...scenario, acres: value })} />
+            <InputStepper label="Year built" value={scenario.yearBuilt} min={1700} max={2026} step={1} suffix="year" onChange={(value) => setScenario({ ...scenario, yearBuilt: value })} />
           </div>
           <div className="scenario-impact">
             <div><SlidersHorizontal size={16} /><span>Scenario impact</span></div>
-            <strong className={estimate >= subject.estimate ? 'positive' : 'negative'}>{estimate >= subject.estimate ? '+' : ''}{money.format(estimate - subject.estimate)}</strong>
-            <small>Heuristic adjustment from sample AVM</small>
+            <strong className={estimate >= currentSubject.estimate ? 'positive' : 'negative'}>{estimate >= currentSubject.estimate ? '+' : ''}{money.format(estimate - currentSubject.estimate)}</strong>
+            <small>Heuristic adjustment from address baseline</small>
           </div>
-          <div className="source-note"><Info size={15} /><p><strong>Sample snapshot</strong> uses the existing app's RentCast comparable set and Zillow market benchmark. Values are illustrative, not an appraisal.</p></div>
+          <div className="source-note"><Info size={15} /><p><strong>{currentSubject.valuationSource}</strong> with Zillow market history. {dashboard.warnings[0] || 'Values are estimates, not an appraisal.'}</p></div>
         </aside>
 
         <div className="analysis-canvas">
           <section className="metrics-row" aria-label="Valuation summary">
-            <Metric icon={CircleDollarSign} label="Estimated value" value={money.format(estimate)} detail={`${compactMoney.format(estimateLow)} - ${compactMoney.format(estimateHigh)} range`} tone="primary" />
-            <Metric icon={Building2} label="City benchmark" value={money.format(subject.marketBenchmark)} detail={`Zillow ZHVI | ${subject.marketAsOf}`} />
-            <Metric icon={TrendingUp} label="Market premium" value={`+${premium.toFixed(1)}%`} detail="vs. Wilmington SFR benchmark" tone="positive" />
-            <Metric icon={BarChart3} label="Weighted comp value" value={compactMoney.format(compSummary.weightedValue)} detail={`${compSummary.count} comparable properties`} />
-            <Metric icon={Activity} label="5-year market change" value={`+${fiveYearChange.toFixed(1)}%`} detail="Wilmington single-family index" tone="positive" />
+            <Metric icon={CircleDollarSign} label="Estimated value" value={moneyOrUnavailable(estimate)} detail={`${moneyOrUnavailable(estimateLow, true)} - ${moneyOrUnavailable(estimateHigh, true)} range`} tone="primary" />
+            <Metric icon={Building2} label="City benchmark" value={moneyOrUnavailable(currentSubject.marketBenchmark)} detail={`Zillow ZHVI | ${currentSubject.marketAsOf}`} />
+            <Metric icon={TrendingUp} label="Market premium" value={premiumLabel} detail={`vs. ${currentMarket.location} SFR benchmark`} tone={premium >= 0 ? 'positive' : 'default'} />
+            <Metric icon={BarChart3} label="Weighted comp value" value={moneyOrUnavailable(compSummary.weightedValue, true)} detail={`${compSummary.count} comparable properties`} />
+            <Metric icon={Activity} label="5-year market change" value={fiveYearLabel} detail={`${currentMarket.location} single-family index`} tone={fiveYearChange >= 0 ? 'positive' : 'default'} />
           </section>
 
           <section className="analysis-section" id="market">
             <div className="section-heading">
-              <div><span className="eyebrow">Market trajectory</span><h2>Value history and home-type context</h2><p>Compare the city index, three-bedroom segment, and an indexed version of this property.</p></div>
+              <div><span className="eyebrow">Market trajectory</span><h2>Value history and home-type context</h2><p>Compare the city index, available bedroom segment, and an indexed version of this property.</p></div>
               <div className="chart-actions">
                 <div className="segmented" aria-label="History range">
                   {[1, 5, 10, 'all'].map((range) => <button key={range} className={historyRange === range ? 'is-active' : ''} onClick={() => setHistoryRange(range)}>{range === 'all' ? 'All' : `${range}Y`}</button>)}
@@ -256,7 +315,7 @@ function App() {
                   <Tooltip content={<ChartTooltip />} />
                   <Legend verticalAlign="top" align="left" iconType="line" wrapperStyle={{ paddingBottom: 18, fontSize: 12 }} />
                   <Line type="monotone" dataKey="city" name="City SFR ZHVI" stroke="#365b50" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="bedroom" name="3-bedroom segment" stroke="#d18b35" strokeWidth={2.2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="bedroom" name={currentMarket.primaryLabel} stroke="#d18b35" strokeWidth={2.2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
                   {showSubjectIndex && <Line type="monotone" dataKey="subjectIndex" name="Subject indexed value" stroke="#b7433f" strokeWidth={2.5} strokeDasharray="7 5" dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />}
                   <Brush dataKey="date" height={25} stroke="#9aa79f" fill="#f6f8f5" travellerWidth={8} />
                 </ComposedChart>
@@ -264,7 +323,7 @@ function App() {
             </div>
             <div className="insight-strip">
               <div><Sparkles size={16} /><span><strong>Indexed value</strong> preserves the subject home's current premium while applying historical bedroom-segment movement.</span></div>
-              <div><CalendarDays size={16} /><span>Last source refresh: <strong>{subject.valuationAsOf}</strong></span></div>
+              <div><CalendarDays size={16} /><span>Last source refresh: <strong>{currentSubject.valuationAsOf}</strong></span></div>
             </div>
           </section>
 
@@ -282,7 +341,9 @@ function App() {
 
             <div className="comp-layout">
               <div className="chart-frame chart-frame--comps">
-                {compView === 'scatter' ? (
+                {!compChartData.length ? (
+                  <div className="empty-state"><Building2 size={24} /><strong>No residential comparables returned</strong><span>This address may be outside RentCast's single-family AVM coverage.</span></div>
+                ) : compView === 'scatter' ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <ScatterChart margin={{ top: 18, right: 26, bottom: 22, left: 8 }}>
                       <CartesianGrid stroke="#dfe4df" strokeDasharray="3 4" />
@@ -316,11 +377,11 @@ function App() {
 
               <aside className="comp-summary">
                 <span className="eyebrow">Comparable signals</span>
-                <div className="signal"><span>Median comp</span><strong>{money.format(compSummary.medianPrice)}</strong><small>{compSummary.differenceFromMedian >= 0 ? '+' : ''}{compSummary.differenceFromMedian.toFixed(1)}% subject vs median</small></div>
-                <div className="signal"><span>Median price / sqft</span><strong>{money.format(compSummary.medianPpsf)}</strong><small>Subject: {money.format(compSummary.subjectPpsf)} / sqft</small></div>
-                <div className="signal"><span>Nearest comp</span><strong>{Math.min(...filteredComps.map((comp) => comp.distance)).toFixed(2)} mi</strong><small>Fit scores range 93% to 97%</small></div>
+                <div className="signal"><span>Median comp</span><strong>{moneyOrUnavailable(compSummary.medianPrice)}</strong><small>{compSummary.differenceFromMedian == null ? 'Not available' : `${compSummary.differenceFromMedian >= 0 ? '+' : ''}${compSummary.differenceFromMedian.toFixed(1)}% subject vs median`}</small></div>
+                <div className="signal"><span>Median price / sqft</span><strong>{moneyOrUnavailable(compSummary.medianPpsf)}</strong><small>Subject: {moneyOrUnavailable(compSummary.subjectPpsf)} / sqft</small></div>
+                <div className="signal"><span>Nearest comp</span><strong>{nearestDistance == null ? 'Not available' : `${nearestDistance.toFixed(2)} mi`}</strong><small>Fit score range {fitRange}</small></div>
                 <div className="range-meter" aria-label="Subject estimate within comparable price range">
-                  <div className="range-meter__labels"><span>{compactMoney.format(compMinimum)}</span><span>{compactMoney.format(compMaximum)}</span></div>
+                  <div className="range-meter__labels"><span>{moneyOrUnavailable(compMinimum, true)}</span><span>{moneyOrUnavailable(compMaximum, true)}</span></div>
                   <div className="range-meter__track"><span style={{ left: `${compRangePosition}%` }} /></div>
                   <small>Subject position in comp range</small>
                 </div>
@@ -330,13 +391,13 @@ function App() {
             <div className="table-wrap">
               <table>
                 <thead><tr><th>Comparable property</th><th>Status</th><th>Price</th><th>Price / sqft</th><th>Beds / baths</th><th>Living area</th><th>Distance</th><th>Fit</th></tr></thead>
-                <tbody>{compChartData.map((comp) => (
+                <tbody>{compChartData.length ? compChartData.map((comp) => (
                   <tr key={comp.address}>
-                    <td><strong>{comp.address}</strong><span>Wilmington, NC 28405</span></td>
+                    <td><strong>{comp.address}</strong><span>{comp.location || currentMarket.location}</span></td>
                     <td><span className={`status-pill status-pill--${comp.status.toLowerCase()}`}>{comp.status}</span></td>
                     <td>{money.format(comp.price)}</td><td>{money.format(comp.ppsf)}</td><td>{comp.beds} / {comp.baths.toFixed(1)}</td><td>{number.format(comp.sqft)} sqft</td><td>{comp.distance.toFixed(2)} mi</td><td><span className="fit-score">{(comp.fit * 100).toFixed(0)}%</span></td>
                   </tr>
-                ))}</tbody>
+                )) : <tr><td colSpan="8" className="empty-table-cell">No comparable properties were returned for this address.</td></tr>}</tbody>
               </table>
             </div>
           </section>
@@ -348,8 +409,8 @@ function App() {
               <div><Ruler size={18} /><span>Living area<strong>{number.format(scenario.squareFeet)} sqft</strong></span></div>
               <div><LandPlot size={18} /><span>Lot size<strong>{scenario.acres.toFixed(2)} acres</strong></span></div>
               <div><CalendarDays size={18} /><span>Year built<strong>{scenario.yearBuilt}</strong></span></div>
-              <div><CircleDollarSign size={18} /><span>Last sale<strong>{money.format(subject.lastSalePrice)}</strong></span></div>
-              <div><Bath size={18} /><span>Last sale date<strong>{subject.lastSaleDate}</strong></span></div>
+              <div><CircleDollarSign size={18} /><span>Last sale<strong>{moneyOrUnavailable(currentSubject.lastSalePrice)}</strong></span></div>
+              <div><Bath size={18} /><span>Last sale date<strong>{currentSubject.lastSaleDate}</strong></span></div>
             </div>
           </section>
         </div>
