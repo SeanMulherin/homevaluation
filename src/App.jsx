@@ -43,7 +43,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { comparables as sampleComparables, marketHistory as sampleHistory, subject as sampleSubject } from './data';
 import { scenarioEstimate, sliceHistory, summarizeComparables } from './analytics';
 import { fetchAddressAnalysis } from './api';
 
@@ -54,18 +53,35 @@ const moneyOrUnavailable = (value, compact = false) => (
   Number.isFinite(value) && value > 0 ? (compact ? compactMoney : money).format(value) : 'Not available'
 );
 const defaultSearchAddress = '1600 Pennsylvania Avenue NW, Washington, DC 20500';
-const sampleDashboard = {
+const initialDashboard = {
   subject: {
-    ...sampleSubject,
+    address: defaultSearchAddress,
+    city: 'Washington',
+    state: 'DC',
+    zip: '20500',
     propertyType: 'Single Family',
+    estimate: 0,
+    low: 0,
+    high: 0,
+    beds: 0,
+    baths: 0,
+    squareFeet: 1,
+    lotSqft: 0,
+    acres: 0,
+    yearBuilt: 1800,
+    lastSalePrice: 0,
+    lastSaleDate: 'Not available',
+    marketBenchmark: 0,
+    marketAsOf: 'Loading',
+    valuationAsOf: 'Loading',
     valuationSource: 'RentCast AVM',
   },
   market: {
-    location: 'Wilmington, NC',
-    primaryLabel: '3-bedroom segment',
-    history: sampleHistory,
+    location: 'Washington, DC',
+    primaryLabel: 'Single-family homes',
+    history: [],
   },
-  comparables: sampleComparables,
+  comparables: [],
   warnings: [],
 };
 
@@ -127,15 +143,16 @@ function App() {
   const requestSequence = useRef(0);
   const initialLoadStarted = useRef(false);
   const [query, setQuery] = useState(defaultSearchAddress);
-  const [dashboard, setDashboard] = useState(sampleDashboard);
+  const [dashboard, setDashboard] = useState(initialDashboard);
+  const [hasLoadedAnalysis, setHasLoadedAnalysis] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [scenario, setScenario] = useState({
-    beds: sampleSubject.beds,
-    baths: sampleSubject.baths,
-    squareFeet: sampleSubject.squareFeet,
-    acres: sampleSubject.acres,
-    yearBuilt: sampleSubject.yearBuilt,
+    beds: initialDashboard.subject.beds,
+    baths: initialDashboard.subject.baths,
+    squareFeet: initialDashboard.subject.squareFeet,
+    acres: initialDashboard.subject.acres,
+    yearBuilt: initialDashboard.subject.yearBuilt,
   });
   const [historyRange, setHistoryRange] = useState(10);
   const [showSubjectIndex, setShowSubjectIndex] = useState(true);
@@ -181,6 +198,7 @@ function App() {
       const nextDashboard = await fetchAddressAnalysis(normalized);
       if (requestId !== requestSequence.current) return;
       setDashboard(nextDashboard);
+      setHasLoadedAnalysis(true);
       setScenario({
         beds: nextDashboard.subject.beds,
         baths: nextDashboard.subject.baths,
@@ -265,6 +283,19 @@ function App() {
 
       {loadError && <div className="load-alert" role="alert"><Info size={17} /><span>{loadError}</span></div>}
 
+      {!hasLoadedAnalysis && (
+        <section className="initial-analysis-state" aria-live="polite">
+          {isLoading ? <RefreshCw className="is-spinning" size={24} /> : <Info size={24} />}
+          <div>
+            <span className="eyebrow">White House property profile</span>
+            <h2>{isLoading ? 'Loading the White House analysis' : 'White House analysis unavailable'}</h2>
+            <p>{isLoading ? defaultSearchAddress : 'Use Analyze to retry the address-level valuation.'}</p>
+          </div>
+        </section>
+      )}
+
+      {hasLoadedAnalysis && (
+        <>
       <div className="dashboard-grid">
         <aside className="scenario-panel" aria-label="Property scenario controls">
           <div className="panel-heading">
@@ -417,6 +448,8 @@ function App() {
       </div>
 
       <footer className="footer"><span>Housing Market Lab</span><p>Estimates are informational and should not replace an appraisal or professional advice.</p><span>RentCast + Zillow data model</span></footer>
+        </>
+      )}
     </main>
   );
 }
