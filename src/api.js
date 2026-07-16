@@ -26,12 +26,14 @@ export function dashboardDataFromApi(payload, requestedAddress) {
   const estimate = safeNumber(valuation.price || market.latest_value);
   const marketBenchmark = safeNumber(market.sfr_latest_value || market.latest_value);
   const citySeries = market.sfr_series || [];
-  const bedroomByDate = new Map((market.bedroom_series || []).map((point) => [point.date, safeNumber(point.value)]));
+  const bedroomSeries = market.bedroom_series || [];
+  const hasBedroomSeries = bedroomSeries.length > 0;
+  const bedroomByDate = new Map(bedroomSeries.map((point) => [point.date, safeNumber(point.value)]));
   const history = citySeries.map((point) => ({
     date: new Date(`${point.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
     iso: point.date.slice(0, 7),
     city: safeNumber(point.value),
-    bedroom: bedroomByDate.get(point.date) || safeNumber(point.value),
+    bedroom: hasBedroomSeries ? bedroomByDate.get(point.date) ?? null : null,
   }));
   const comparables = (payload.comparables || [])
     .filter((comparable) => comparable.price != null && comparable.square_footage != null)
@@ -79,6 +81,7 @@ export function dashboardDataFromApi(payload, requestedAddress) {
     market: {
       location: market.location || [rawSubject.city, rawSubject.state].filter(Boolean).join(', '),
       primaryLabel: market.primary_label || 'Single-family homes',
+      hasBedroomSeries,
       history,
     },
     comparables,

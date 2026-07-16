@@ -32,7 +32,23 @@ describe('address analysis adapter', () => {
     expect(result.subject.address).toContain('Pennsylvania');
     expect(result.subject.marketBenchmark).toBe(650000);
     expect(result.market.history).toHaveLength(2);
+    expect(result.market.hasBedroomSeries).toBe(false);
+    expect(result.market.history[0].bedroom).toBeNull();
     expect(result.comparables[0].location).toBe('Washington, DC 20001');
+  });
+
+  it('keeps a distinct bedroom series when Zillow provides one', () => {
+    const result = dashboardDataFromApi({
+      ...payload,
+      market: {
+        ...payload.market,
+        primary_label: '4 bedroom homes',
+        bedroom_series: [{ date: '2026-05-31', value: 700000 }, { date: '2026-06-30', value: 710000 }],
+      },
+    }, 'fallback address');
+
+    expect(result.market.hasBedroomSeries).toBe(true);
+    expect(result.market.history.map((point) => point.bedroom)).toEqual([700000, 710000]);
   });
 
   it('posts the requested address to the backend', async () => {

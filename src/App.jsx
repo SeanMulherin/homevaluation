@@ -79,6 +79,7 @@ const initialDashboard = {
   market: {
     location: 'Washington, DC',
     primaryLabel: 'Single-family homes',
+    hasBedroomSeries: false,
     history: [],
   },
   comparables: [],
@@ -176,10 +177,10 @@ function App() {
   );
   const history = useMemo(() => {
     const sliced = sliceHistory(currentMarket.history, historyRange);
-    const latestBedroom = currentMarket.history.at(-1)?.bedroom || currentSubject.marketBenchmark || 1;
+    const latestBasis = currentMarket.history.at(-1)?.bedroom || currentMarket.history.at(-1)?.city || currentSubject.marketBenchmark || 1;
     return sliced.map((point) => ({
       ...point,
-      subjectIndex: Math.round(point.bedroom * (estimate / latestBedroom)),
+      subjectIndex: Math.round((point.bedroom || point.city) * (estimate / latestBasis)),
     }));
   }, [currentMarket.history, currentSubject.marketBenchmark, historyRange, estimate]);
   const premium = currentSubject.marketBenchmark ? ((estimate / currentSubject.marketBenchmark) - 1) * 100 : 0;
@@ -346,7 +347,7 @@ function App() {
                   <Tooltip content={<ChartTooltip />} />
                   <Legend verticalAlign="top" align="left" iconType="line" wrapperStyle={{ paddingBottom: 18, fontSize: 12 }} />
                   <Line type="monotone" dataKey="city" name="City SFR ZHVI" stroke="#365b50" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="bedroom" name={currentMarket.primaryLabel} stroke="#d18b35" strokeWidth={2.2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
+                  {currentMarket.hasBedroomSeries && <Line type="monotone" dataKey="bedroom" name={currentMarket.primaryLabel} stroke="#d18b35" strokeWidth={2.2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />}
                   {showSubjectIndex && <Line type="monotone" dataKey="subjectIndex" name="Subject indexed value" stroke="#b7433f" strokeWidth={2.5} strokeDasharray="7 5" dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />}
                   <Brush dataKey="date" height={25} stroke="#9aa79f" fill="#f6f8f5" travellerWidth={8} />
                 </ComposedChart>
