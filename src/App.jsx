@@ -287,9 +287,9 @@ function App() {
         <section className="initial-analysis-state" aria-live="polite">
           {isLoading ? <RefreshCw className="is-spinning" size={24} /> : <Info size={24} />}
           <div>
-            <span className="eyebrow">White House property profile</span>
-            <h2>{isLoading ? 'Loading the White House analysis' : 'White House analysis unavailable'}</h2>
-            <p>{isLoading ? defaultSearchAddress : 'Use Analyze to retry the address-level valuation.'}</p>
+            <span className="eyebrow">Property analysis</span>
+            <h2>{isLoading ? 'Loading property analysis' : 'Property analysis unavailable'}</h2>
+            <p>{isLoading ? 'Retrieving current valuation, market history, and comparable properties.' : 'Use Analyze to retry the address-level valuation.'}</p>
           </div>
         </section>
       )}
