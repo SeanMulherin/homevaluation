@@ -30,16 +30,18 @@ button { cursor: pointer; }
   align-items: center;
   gap: 30px;
   padding: 0 clamp(18px, 3vw, 46px);
-  background: #17241f;
-  color: white;
+  background: rgb(214, 226, 221);
+  color: #18372f;
   position: sticky;
   top: 0;
   z-index: 20;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid #b5c8bf;
+  box-shadow: 0 2px 10px rgba(24, 55, 47, 0.08);
 }
-.brand { display: flex; align-items: center; gap: 10px; color: white; text-decoration: none; font-weight: 750; white-space: nowrap; }
-.brand__mark { width: 34px; height: 34px; display: grid; place-items: center; background: #e7b05f; color: #17241f; border-radius: 5px; }
-.portfolio-link { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; color: white; text-decoration: none; font-size: 13px; font-weight: 650; padding-left: 18px; border-left: 1px solid #43524c; white-space: nowrap; }
+.brand { display: flex; align-items: center; gap: 10px; color: #18372f; text-decoration: none; font-weight: 750; white-space: nowrap; }
+.brand__mark { width: 34px; height: 34px; display: grid; place-items: center; background: #365b50; color: white; border-radius: 5px; }
+.portfolio-link { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; color: #25463d; text-decoration: none; font-size: 13px; font-weight: 700; padding-left: 18px; border-left: 1px solid #a8bdb4; white-space: nowrap; }
+.brand:hover, .portfolio-link:hover { color: #0f2d25; }
 
 .workspace-header { min-height: 146px; padding: 28px clamp(18px, 3vw, 46px); display: grid; grid-template-columns: minmax(260px, 1fr) minmax(360px, 620px); align-items: center; gap: 28px; background: var(--surface); border-bottom: 1px solid var(--line); position: relative; }
 .workspace-header__copy h1 { font-size: clamp(25px, 3vw, 38px); line-height: 1.1; margin: 7px 0 9px; letter-spacing: 0; }
