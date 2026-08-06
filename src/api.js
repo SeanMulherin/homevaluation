@@ -11,6 +11,10 @@ const locationFromAddress = (address) => {
   return parts.length > 1 ? parts.slice(1).join(', ') : '';
 };
 
+export const zillowListingUrl = (address) => (
+  `https://www.zillow.com/homes/${encodeURIComponent(String(address || '').trim())}_rb/`
+);
+
 const displayMonth = (value) => {
   if (!value) return 'Not available';
   const date = new Date(`${String(value).slice(0, 10)}T12:00:00`);
@@ -71,11 +75,13 @@ export function dashboardDataFromApi(payload, requestedAddress) {
     .filter((comparable) => comparable.price != null && comparable.square_footage != null)
     .map((comparable, index) => {
       const comparableAddress = comparable.formatted_address || comparable.address_line_1 || `Comparable ${index + 1}`;
+      const status = comparable.status || 'Unknown';
       return {
         address: comparableAddress.split(',')[0],
         fullAddress: comparableAddress,
         location: locationFromAddress(comparableAddress),
-        status: comparable.status || 'Unknown',
+        status,
+        zillowUrl: status.toLowerCase() === 'active' ? zillowListingUrl(comparableAddress) : null,
         price: safeNumber(comparable.price),
         beds: safeNumber(comparable.bedrooms),
         baths: safeNumber(comparable.bathrooms),

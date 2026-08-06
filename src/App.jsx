@@ -397,7 +397,18 @@ function App() {
                 <thead><tr><th>Comparable property</th><th>Status</th><th>Price</th><th>Price / sqft</th><th>Beds / baths</th><th>Living area</th><th>Distance</th><th>Fit</th></tr></thead>
                 <tbody>{compChartData.length ? compChartData.map((comp) => (
                   <tr key={`${currentSubject.address}-${comp.fullAddress || comp.address}`}>
-                    <td><strong>{comp.address}</strong><span>{comp.location || currentMarket.location}</span></td>
+                    <td>{comp.zillowUrl ? (
+                      <a
+                        className="comp-address-link"
+                        href={comp.zillowUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`Open active Zillow listing for ${comp.fullAddress}`}
+                      >
+                        <span><strong>{comp.address}</strong><small>{comp.location || currentMarket.location}</small></span>
+                        <ExternalLink size={14} aria-hidden="true" />
+                      </a>
+                    ) : <><strong>{comp.address}</strong><span>{comp.location || currentMarket.location}</span></>}</td>
                     <td><span className={`status-pill status-pill--${comp.status.toLowerCase()}`}>{comp.status}</span></td>
                     <td>{money.format(comp.price)}</td><td>{money.format(comp.ppsf)}</td><td>{comp.beds} / {comp.baths.toFixed(1)}</td><td>{number.format(comp.sqft)} sqft</td><td>{comp.distance.toFixed(2)} mi</td><td><span className="fit-score">{(comp.fit * 100).toFixed(0)}%</span></td>
                   </tr>

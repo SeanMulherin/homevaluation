@@ -153,6 +153,12 @@ td:first-child { min-width: 205px; white-space: normal; }
 td:first-child strong, td:first-child span { display: block; }
 td:first-child strong { color: var(--ink); font-size: 11px; overflow-wrap: anywhere; }
 td:first-child span { color: var(--muted); margin-top: 2px; font-size: 9px; }
+.comp-address-link { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; color: inherit; text-decoration: none; }
+td:first-child .comp-address-link > span { min-width: 0; margin-top: 0; }
+.comp-address-link small { display: block; margin-top: 2px; color: var(--muted); font-size: 9px; overflow-wrap: anywhere; }
+.comp-address-link svg { flex: 0 0 auto; color: var(--green); }
+.comp-address-link:hover strong, .comp-address-link:focus-visible strong { color: var(--green); text-decoration: underline; text-underline-offset: 2px; }
+.comp-address-link:focus-visible { border-radius: 2px; outline: 2px solid var(--green); outline-offset: 3px; }
 .empty-table-cell { height: 76px; color: var(--muted); text-align: center; }
 tbody tr:hover { background: #fbfcfa; }
 .status-pill { display: inline-block; min-width: 54px; padding: 3px 7px; border-radius: 9px; text-align: center; font-size: 9px; font-weight: 750; }

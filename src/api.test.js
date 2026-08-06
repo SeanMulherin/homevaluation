@@ -4,6 +4,7 @@ import {
   fetchAddressAnalysis,
   readCachedDashboard,
   writeCachedDashboard,
+  zillowListingUrl,
 } from './api';
 
 const payload = {
@@ -40,6 +41,20 @@ describe('address analysis adapter', () => {
     expect(result.market.hasBedroomSeries).toBe(false);
     expect(result.market.history[0].bedroom).toBeNull();
     expect(result.comparables[0].location).toBe('Washington, DC 20001');
+    expect(result.comparables[0].zillowUrl).toBe(zillowListingUrl(payload.comparables[0].formatted_address));
+  });
+
+  it('adds Zillow links only to active comparable listings', () => {
+    const result = dashboardDataFromApi({
+      ...payload,
+      comparables: [
+        payload.comparables[0],
+        { ...payload.comparables[0], formatted_address: '2 Second St, Washington, DC 20001', status: 'Inactive' },
+      ],
+    }, 'fallback address');
+
+    expect(result.comparables[0].zillowUrl).toContain('zillow.com/homes/');
+    expect(result.comparables[1].zillowUrl).toBeNull();
   });
 
   it('keeps a distinct bedroom series when Zillow provides one', () => {
