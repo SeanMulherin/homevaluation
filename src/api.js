@@ -1,5 +1,5 @@
 export const ANALYSIS_API_URL = 'https://web-app-housing.onrender.com/api/analysis';
-const ANALYSIS_CACHE_PREFIX = 'housing-market-lab:analysis:v1:';
+const ANALYSIS_CACHE_PREFIX = 'housing-market-lab:analysis:v2:';
 
 const safeNumber = (value, fallback = 0) => {
   const parsed = Number(value);
