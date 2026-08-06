@@ -17,6 +17,10 @@ const payload = {
     square_footage: 55000,
     lot_size: 784080,
     year_built: 1800,
+    listing_status: 'Active',
+    listing_price: 99000000,
+    listed_date: '2026-07-15T00:00:00.000Z',
+    days_on_market: 22,
   },
   valuation: { price: 100000000, price_range_low: 90000000, price_range_high: 110000000, source: 'RentCast AVM', as_of: '2026-07-15' },
   market: {
@@ -37,6 +41,8 @@ describe('address analysis adapter', () => {
     const result = dashboardDataFromApi(payload, 'fallback address');
     expect(result.subject.address).toContain('Pennsylvania');
     expect(result.subject.marketBenchmark).toBe(650000);
+    expect(result.subject.listingPrice).toBe(99000000);
+    expect(result.subject.listingStatus).toBe('Active');
     expect(result.market.history).toHaveLength(2);
     expect(result.market.hasBedroomSeries).toBe(false);
     expect(result.market.history[0].bedroom).toBeNull();

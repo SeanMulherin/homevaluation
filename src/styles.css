@@ -180,13 +180,8 @@ tbody tr:hover { background: #fbfcfa; }
 .confidence-pill--medium { color: #805313; background: #fff0d6; }
 .confidence-pill--low { color: #7a3c38; background: #f8e7e5; }
 .deal-grid { display: grid; grid-template-columns: minmax(210px, 1.2fr) repeat(3, minmax(150px, 1fr)); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
-.asking-price-control, .deal-stat { min-width: 0; min-height: 104px; padding: 16px; background: var(--surface-alt); }
-.asking-price-control { display: flex; flex-direction: column; gap: 8px; color: var(--muted); font-size: 10px; font-weight: 750; }
-.asking-price-control > div { height: 45px; display: flex; align-items: center; border: 1px solid #bbc7c0; border-radius: 5px; background: white; overflow: hidden; }
-.asking-price-control > div:focus-within { border-color: var(--green); box-shadow: 0 0 0 2px rgba(54,91,80,0.1); }
-.asking-price-control strong { padding-left: 12px; color: var(--green); font-size: 16px; }
-.asking-price-control input { width: 100%; min-width: 0; height: 100%; border: 0; outline: 0; padding: 0 12px 0 6px; color: var(--ink); background: transparent; font-weight: 750; }
-.deal-stat { display: flex; flex-direction: column; justify-content: center; border-left: 1px solid var(--line); }
+.deal-stat { min-width: 0; min-height: 104px; display: flex; flex-direction: column; justify-content: center; padding: 16px; border-left: 1px solid var(--line); background: var(--surface-alt); }
+.deal-stat--asking { border-left: 0; }
 .deal-stat span, .deal-stat small { color: var(--muted); font-size: 10px; line-height: 1.35; overflow-wrap: anywhere; }
 .deal-stat strong { margin: 7px 0 5px; color: var(--ink); font-size: clamp(19px, 2vw, 25px); line-height: 1; overflow-wrap: anywhere; }
 .deal-stat--positive strong { color: #28714f; }
@@ -276,6 +271,7 @@ tbody tr:hover { background: #fbfcfa; }
   .facts-grid > div:first-child { border-top: 0; }
   .deal-grid { grid-template-columns: 1fr; }
   .deal-stat, .deal-stat:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); }
+  .deal-stat:first-child { border-top: 0; }
   .deal-assessment__heading { align-items: flex-start; }
 }
 

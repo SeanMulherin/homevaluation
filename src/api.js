@@ -1,5 +1,5 @@
 export const ANALYSIS_API_URL = 'https://web-app-housing.onrender.com/api/analysis';
-const ANALYSIS_CACHE_PREFIX = 'housing-market-lab:analysis:v2:';
+const ANALYSIS_CACHE_PREFIX = 'housing-market-lab:analysis:v3:';
 
 const safeNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -111,6 +111,11 @@ export function dashboardDataFromApi(payload, requestedAddress) {
       yearBuilt: safeNumber(rawSubject.year_built, 1990),
       lastSalePrice: safeNumber(rawSubject.last_sale_price),
       lastSaleDate: rawSubject.last_sale_date || 'Not available',
+      listingStatus: rawSubject.listing_status || null,
+      listingPrice: safeNumber(rawSubject.listing_price),
+      listedDate: displayMonth(rawSubject.listed_date),
+      listingLastSeenDate: displayMonth(rawSubject.listing_last_seen_date),
+      daysOnMarket: safeNumber(rawSubject.days_on_market),
       marketBenchmark,
       marketAsOf: displayMonth(market.latest_date),
       valuationAsOf: displayMonth(valuation.as_of),

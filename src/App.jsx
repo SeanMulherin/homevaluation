@@ -139,7 +139,6 @@ function App() {
   const [showSubjectIndex, setShowSubjectIndex] = useState(true);
   const [compStatus, setCompStatus] = useState('All');
   const [compView, setCompView] = useState('scatter');
-  const [askingPrice, setAskingPrice] = useState('');
   const [notice, setNotice] = useState('');
 
   const currentSubject = dashboard.subject;
@@ -166,8 +165,8 @@ function App() {
   );
   const dealComparables = activeDealComparables.length >= 3 ? activeDealComparables : eligibleDealComparables;
   const dealAssessment = useMemo(
-    () => comparableDealAssessment(dealComparables, Number(askingPrice), scenario.squareFeet),
-    [dealComparables, askingPrice, scenario.squareFeet],
+    () => comparableDealAssessment(dealComparables, currentSubject.listingPrice, scenario.squareFeet),
+    [dealComparables, currentSubject.listingPrice, scenario.squareFeet],
   );
   const history = useMemo(() => {
     const sliced = sliceHistory(currentMarket.history, historyRange);
@@ -202,7 +201,6 @@ function App() {
         yearBuilt: nextDashboard.subject.yearBuilt,
       });
       setCompStatus('All');
-      setAskingPrice('');
       setNotice(initial ? '' : `Analysis updated for ${nextDashboard.subject.address}.`);
       if (!initial) setTimeout(() => setNotice(''), 3600);
     } catch (error) {
@@ -264,7 +262,7 @@ function App() {
   const fiveYearLabel = `${fiveYearChange >= 0 ? '+' : ''}${fiveYearChange.toFixed(1)}%`;
   const dealPercent = dealAssessment.discountPercent;
   const dealLabel = dealPercent == null
-    ? 'Enter asking price'
+    ? 'No active listing to compare'
     : dealPercent >= 10
       ? 'Strong potential discount'
       : dealPercent >= 3
@@ -275,6 +273,9 @@ function App() {
             ? 'Above comparable homes'
             : 'Substantial comparable premium';
   const dealTone = dealPercent == null ? 'neutral' : dealPercent >= 3 ? 'positive' : dealPercent <= -3 ? 'negative' : 'neutral';
+  const listingDetail = currentSubject.listingPrice
+    ? [currentSubject.listedDate !== 'Not available' ? `Listed ${currentSubject.listedDate}` : null, currentSubject.daysOnMarket ? `${currentSubject.daysOnMarket} days on market` : null].filter(Boolean).join(' | ') || 'Active RentCast sale listing'
+    : 'No active sale listing found';
 
   return (
     <main className="app-shell">
@@ -469,13 +470,10 @@ function App() {
               <span className={`confidence-pill confidence-pill--${dealAssessment.confidence.toLowerCase()}`}>{dealAssessment.confidence} confidence</span>
             </div>
             <div className="deal-grid">
-              <label className="asking-price-control">
-                <span>Asking price</span>
-                <div><strong>$</strong><input type="number" min="0" step="5000" inputMode="numeric" value={askingPrice} onChange={(event) => setAskingPrice(event.target.value)} placeholder="Enter listing price" /></div>
-              </label>
+              <div className="deal-stat deal-stat--asking"><span>Current asking price</span><strong>{moneyOrUnavailable(currentSubject.listingPrice)}</strong><small>{listingDetail}</small></div>
               <div className="deal-stat"><span>Comp-supported value</span><strong>{moneyOrUnavailable(dealAssessment.expectedValue)}</strong><small>{dealAssessment.adjustedForSize ? 'Adjusted to subject living area' : 'Weighted by fit and distance'}</small></div>
               <div className={`deal-stat deal-stat--${dealTone}`}><span>Comparable discount</span><strong>{dealPercent == null ? 'Not available' : `${dealPercent >= 0 ? '+' : ''}${dealPercent.toFixed(1)}%`}</strong><small>{dealLabel}</small></div>
-              <div className={`deal-stat deal-stat--${dealTone}`}><span>Dollar difference</span><strong>{dealAssessment.dollarGap == null ? 'Not available' : `${dealAssessment.dollarGap >= 0 ? '+' : '-'}${money.format(Math.abs(dealAssessment.dollarGap))}`}</strong><small>{dealAssessment.dollarGap == null ? 'Enter asking price to compare' : dealAssessment.dollarGap >= 0 ? 'Below comp-supported value' : 'Above comp-supported value'}</small></div>
+              <div className={`deal-stat deal-stat--${dealTone}`}><span>Dollar difference</span><strong>{dealAssessment.dollarGap == null ? 'Not available' : `${dealAssessment.dollarGap >= 0 ? '+' : '-'}${money.format(Math.abs(dealAssessment.dollarGap))}`}</strong><small>{dealAssessment.dollarGap == null ? 'Available when the property is actively listed' : dealAssessment.dollarGap >= 0 ? 'Below comp-supported value' : 'Above comp-supported value'}</small></div>
             </div>
             <div className="deal-method"><Info size={15} /><span>Based on {dealAssessment.count} {activeDealComparables.length >= 3 ? 'active nearby listings' : 'nearby comparable properties'}. Active prices are seller expectations, not completed sale prices.</span></div>
           </section>
