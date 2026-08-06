@@ -41,6 +41,49 @@ export function summarizeComparables(comparables, subjectValue, subjectSqft) {
   };
 }
 
+export function comparableDealAssessment(comparables, askingPrice, subjectSqft) {
+  const validComparables = comparables.filter((comp) => (
+    Number.isFinite(comp.price) && comp.price > 0
+  ));
+  if (!validComparables.length) {
+    return { count: 0, expectedValue: null, discountPercent: null, dollarGap: null, confidence: 'Low', adjustedForSize: false };
+  }
+
+  const sizeAdjusted = Number.isFinite(subjectSqft) && subjectSqft > 0
+    ? validComparables.filter((comp) => Number.isFinite(comp.sqft) && comp.sqft > 0)
+    : [];
+  const adjustedForSize = sizeAdjusted.length >= 3;
+  const evidence = adjustedForSize ? sizeAdjusted : validComparables;
+  const weightedValues = evidence.map((comp) => {
+    const weight = Math.max(0.05, comp.fit || 0) / Math.max(0.2, (comp.distance || 0) + 0.25);
+    const value = adjustedForSize ? (comp.price / comp.sqft) * subjectSqft : comp.price;
+    return { value, weight, fit: comp.fit || 0 };
+  });
+  const totalWeight = weightedValues.reduce((total, item) => total + item.weight, 0);
+  const expectedValue = totalWeight
+    ? weightedValues.reduce((total, item) => total + item.value * item.weight, 0) / totalWeight
+    : null;
+  const meanValue = weightedValues.reduce((total, item) => total + item.value, 0) / weightedValues.length;
+  const variance = weightedValues.reduce((total, item) => total + ((item.value - meanValue) ** 2), 0) / weightedValues.length;
+  const dispersion = meanValue ? Math.sqrt(variance) / meanValue : 1;
+  const averageFit = weightedValues.reduce((total, item) => total + item.fit, 0) / weightedValues.length;
+  const confidence = evidence.length >= 8 && averageFit >= 0.75 && dispersion <= 0.2
+    ? 'High'
+    : evidence.length >= 4 && averageFit >= 0.5 && dispersion <= 0.35
+      ? 'Medium'
+      : 'Low';
+  const validAskingPrice = Number.isFinite(askingPrice) && askingPrice > 0 ? askingPrice : null;
+
+  return {
+    count: evidence.length,
+    expectedValue,
+    discountPercent: validAskingPrice && expectedValue ? ((expectedValue - validAskingPrice) / expectedValue) * 100 : null,
+    dollarGap: validAskingPrice && expectedValue ? expectedValue - validAskingPrice : null,
+    confidence,
+    adjustedForSize,
+  };
+}
+
 export function sliceHistory(history, years) {
   if (years === 'all') return history;
   return history.slice(-Number(years) * 12 - 1);

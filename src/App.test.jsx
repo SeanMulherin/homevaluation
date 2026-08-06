@@ -11,6 +11,8 @@ describe('initial dashboard', () => {
     expect(markup).toContain('Valuation summary');
     expect(markup).toContain('Washington, DC SFR benchmark');
     expect(markup).toContain('Open active Zillow listing for 2030 F St NW');
+    expect(markup).toContain('Comparable deal assessment');
+    expect(markup).toContain('Comp-supported value');
     expect(markup).not.toContain('Loading property analysis');
     expect(markup).not.toContain('Wilmington, NC');
     expect(markup).not.toContain('1818 Cross Staff Pl');

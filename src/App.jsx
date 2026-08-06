@@ -43,7 +43,12 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { scenarioEstimate, sliceHistory, summarizeComparables } from './analytics';
+import {
+  comparableDealAssessment,
+  scenarioEstimate,
+  sliceHistory,
+  summarizeComparables,
+} from './analytics';
 import {
   dashboardDataFromApi,
   fetchAddressAnalysis,
@@ -60,6 +65,7 @@ const moneyOrUnavailable = (value, compact = false) => (
 );
 const defaultSearchAddress = '1600 Pennsylvania Avenue NW, Washington, DC 20500';
 const initialDashboard = dashboardDataFromApi(defaultAnalysis, defaultSearchAddress);
+const addressKey = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 function Metric({ label, value, detail, tone = 'default', icon: Icon }) {
   return (
@@ -133,6 +139,7 @@ function App() {
   const [showSubjectIndex, setShowSubjectIndex] = useState(true);
   const [compStatus, setCompStatus] = useState('All');
   const [compView, setCompView] = useState('scatter');
+  const [askingPrice, setAskingPrice] = useState('');
   const [notice, setNotice] = useState('');
 
   const currentSubject = dashboard.subject;
@@ -148,6 +155,19 @@ function App() {
   const compSummary = useMemo(
     () => summarizeComparables(filteredComps, estimate, scenario.squareFeet),
     [filteredComps, estimate, scenario.squareFeet],
+  );
+  const eligibleDealComparables = useMemo(
+    () => dashboard.comparables.filter((comp) => addressKey(comp.fullAddress) !== addressKey(currentSubject.address)),
+    [dashboard.comparables, currentSubject.address],
+  );
+  const activeDealComparables = useMemo(
+    () => eligibleDealComparables.filter((comp) => comp.status === 'Active'),
+    [eligibleDealComparables],
+  );
+  const dealComparables = activeDealComparables.length >= 3 ? activeDealComparables : eligibleDealComparables;
+  const dealAssessment = useMemo(
+    () => comparableDealAssessment(dealComparables, Number(askingPrice), scenario.squareFeet),
+    [dealComparables, askingPrice, scenario.squareFeet],
   );
   const history = useMemo(() => {
     const sliced = sliceHistory(currentMarket.history, historyRange);
@@ -182,6 +202,7 @@ function App() {
         yearBuilt: nextDashboard.subject.yearBuilt,
       });
       setCompStatus('All');
+      setAskingPrice('');
       setNotice(initial ? '' : `Analysis updated for ${nextDashboard.subject.address}.`);
       if (!initial) setTimeout(() => setNotice(''), 3600);
     } catch (error) {
@@ -241,6 +262,19 @@ function App() {
     : 'Not available';
   const premiumLabel = `${premium >= 0 ? '+' : ''}${premium.toFixed(1)}%`;
   const fiveYearLabel = `${fiveYearChange >= 0 ? '+' : ''}${fiveYearChange.toFixed(1)}%`;
+  const dealPercent = dealAssessment.discountPercent;
+  const dealLabel = dealPercent == null
+    ? 'Enter asking price'
+    : dealPercent >= 10
+      ? 'Strong potential discount'
+      : dealPercent >= 3
+        ? 'Below comparable homes'
+        : dealPercent > -3
+          ? 'In line with comparable homes'
+          : dealPercent > -10
+            ? 'Above comparable homes'
+            : 'Substantial comparable premium';
+  const dealTone = dealPercent == null ? 'neutral' : dealPercent >= 3 ? 'positive' : dealPercent <= -3 ? 'negative' : 'neutral';
 
   return (
     <main className="app-shell">
@@ -427,6 +461,23 @@ function App() {
               <div><CircleDollarSign size={18} /><span>Last sale<strong>{moneyOrUnavailable(currentSubject.lastSalePrice)}</strong></span></div>
               <div><Bath size={18} /><span>Last sale date<strong>{currentSubject.lastSaleDate}</strong></span></div>
             </div>
+          </section>
+
+          <section className="deal-assessment" aria-label="Comparable deal assessment">
+            <div className="section-heading deal-assessment__heading">
+              <div><span className="eyebrow">Listing price comparison</span><h2>Comparable deal assessment</h2><p>See whether the asking price is below or above nearby comparable listings.</p></div>
+              <span className={`confidence-pill confidence-pill--${dealAssessment.confidence.toLowerCase()}`}>{dealAssessment.confidence} confidence</span>
+            </div>
+            <div className="deal-grid">
+              <label className="asking-price-control">
+                <span>Asking price</span>
+                <div><strong>$</strong><input type="number" min="0" step="5000" inputMode="numeric" value={askingPrice} onChange={(event) => setAskingPrice(event.target.value)} placeholder="Enter listing price" /></div>
+              </label>
+              <div className="deal-stat"><span>Comp-supported value</span><strong>{moneyOrUnavailable(dealAssessment.expectedValue)}</strong><small>{dealAssessment.adjustedForSize ? 'Adjusted to subject living area' : 'Weighted by fit and distance'}</small></div>
+              <div className={`deal-stat deal-stat--${dealTone}`}><span>Comparable discount</span><strong>{dealPercent == null ? 'Not available' : `${dealPercent >= 0 ? '+' : ''}${dealPercent.toFixed(1)}%`}</strong><small>{dealLabel}</small></div>
+              <div className={`deal-stat deal-stat--${dealTone}`}><span>Dollar difference</span><strong>{dealAssessment.dollarGap == null ? 'Not available' : `${dealAssessment.dollarGap >= 0 ? '+' : '-'}${money.format(Math.abs(dealAssessment.dollarGap))}`}</strong><small>{dealAssessment.dollarGap == null ? 'Enter asking price to compare' : dealAssessment.dollarGap >= 0 ? 'Below comp-supported value' : 'Above comp-supported value'}</small></div>
+            </div>
+            <div className="deal-method"><Info size={15} /><span>Based on {dealAssessment.count} {activeDealComparables.length >= 3 ? 'active nearby listings' : 'nearby comparable properties'}. Active prices are seller expectations, not completed sale prices.</span></div>
           </section>
         </div>
       </div>
