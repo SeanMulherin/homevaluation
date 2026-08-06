@@ -1,4 +1,5 @@
 export const ANALYSIS_API_URL = 'https://web-app-housing.onrender.com/api/analysis';
+const ANALYSIS_CACHE_PREFIX = 'housing-market-lab:analysis:v1:';
 
 const safeNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -17,6 +18,37 @@ const displayMonth = (value) => {
     ? String(value)
     : date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 };
+
+const analysisCacheKey = (address) => (
+  `${ANALYSIS_CACHE_PREFIX}${String(address || '').trim().toLowerCase().replace(/\s+/g, ' ')}`
+);
+
+const browserStorage = (storage) => {
+  if (storage) return storage;
+  if (typeof window === 'undefined') return null;
+  return window.localStorage;
+};
+
+export function readCachedDashboard(address, storage) {
+  try {
+    const value = browserStorage(storage)?.getItem(analysisCacheKey(address));
+    if (!value) return null;
+    return JSON.parse(value)?.dashboard || null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeCachedDashboard(address, dashboard, storage) {
+  try {
+    browserStorage(storage)?.setItem(
+      analysisCacheKey(address),
+      JSON.stringify({ cachedAt: new Date().toISOString(), dashboard }),
+    );
+  } catch {
+    // Browser storage is an optional performance enhancement.
+  }
+}
 
 export function dashboardDataFromApi(payload, requestedAddress) {
   const rawSubject = payload.subject || {};

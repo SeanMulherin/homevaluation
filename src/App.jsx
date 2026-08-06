@@ -44,7 +44,13 @@ import {
   YAxis,
 } from 'recharts';
 import { scenarioEstimate, sliceHistory, summarizeComparables } from './analytics';
-import { fetchAddressAnalysis } from './api';
+import {
+  dashboardDataFromApi,
+  fetchAddressAnalysis,
+  readCachedDashboard,
+  writeCachedDashboard,
+} from './api';
+import defaultAnalysis from './default-analysis.json';
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const compactMoney = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 });
@@ -53,38 +59,7 @@ const moneyOrUnavailable = (value, compact = false) => (
   Number.isFinite(value) && value > 0 ? (compact ? compactMoney : money).format(value) : 'Not available'
 );
 const defaultSearchAddress = '1600 Pennsylvania Avenue NW, Washington, DC 20500';
-const initialDashboard = {
-  subject: {
-    address: defaultSearchAddress,
-    city: 'Washington',
-    state: 'DC',
-    zip: '20500',
-    propertyType: 'Single Family',
-    estimate: 0,
-    low: 0,
-    high: 0,
-    beds: 0,
-    baths: 0,
-    squareFeet: 1,
-    lotSqft: 0,
-    acres: 0,
-    yearBuilt: 1800,
-    lastSalePrice: 0,
-    lastSaleDate: 'Not available',
-    marketBenchmark: 0,
-    marketAsOf: 'Loading',
-    valuationAsOf: 'Loading',
-    valuationSource: 'RentCast AVM',
-  },
-  market: {
-    location: 'Washington, DC',
-    primaryLabel: 'Single-family homes',
-    hasBedroomSeries: false,
-    history: [],
-  },
-  comparables: [],
-  warnings: [],
-};
+const initialDashboard = dashboardDataFromApi(defaultAnalysis, defaultSearchAddress);
 
 function Metric({ label, value, detail, tone = 'default', icon: Icon }) {
   return (
@@ -145,8 +120,7 @@ function App() {
   const initialLoadStarted = useRef(false);
   const [query, setQuery] = useState(defaultSearchAddress);
   const [dashboard, setDashboard] = useState(initialDashboard);
-  const [hasLoadedAnalysis, setHasLoadedAnalysis] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [scenario, setScenario] = useState({
     beds: initialDashboard.subject.beds,
@@ -193,13 +167,13 @@ function App() {
     const normalized = address.trim();
     if (!normalized) return;
     const requestId = ++requestSequence.current;
-    setIsLoading(true);
+    if (!initial) setIsLoading(true);
     setLoadError('');
     try {
       const nextDashboard = await fetchAddressAnalysis(normalized);
       if (requestId !== requestSequence.current) return;
       setDashboard(nextDashboard);
-      setHasLoadedAnalysis(true);
+      writeCachedDashboard(normalized, nextDashboard);
       setScenario({
         beds: nextDashboard.subject.beds,
         baths: nextDashboard.subject.baths,
@@ -211,17 +185,28 @@ function App() {
       setNotice(initial ? '' : `Analysis updated for ${nextDashboard.subject.address}.`);
       if (!initial) setTimeout(() => setNotice(''), 3600);
     } catch (error) {
-      if (requestId === requestSequence.current) {
+      if (requestId === requestSequence.current && !initial) {
         setLoadError(error.message || 'Address analysis could not be loaded.');
       }
     } finally {
-      if (requestId === requestSequence.current) setIsLoading(false);
+      if (requestId === requestSequence.current && !initial) setIsLoading(false);
     }
   };
 
   useEffect(() => {
     if (initialLoadStarted.current) return;
     initialLoadStarted.current = true;
+    const cachedDashboard = readCachedDashboard(defaultSearchAddress);
+    if (cachedDashboard) {
+      setDashboard(cachedDashboard);
+      setScenario({
+        beds: cachedDashboard.subject.beds,
+        baths: cachedDashboard.subject.baths,
+        squareFeet: cachedDashboard.subject.squareFeet,
+        acres: cachedDashboard.subject.acres,
+        yearBuilt: cachedDashboard.subject.yearBuilt,
+      });
+    }
     void analyzeAddress(defaultSearchAddress, true);
   }, []);
 
@@ -284,19 +269,6 @@ function App() {
 
       {loadError && <div className="load-alert" role="alert"><Info size={17} /><span>{loadError}</span></div>}
 
-      {!hasLoadedAnalysis && (
-        <section className="initial-analysis-state" aria-live="polite">
-          {isLoading ? <RefreshCw className="is-spinning" size={24} /> : <Info size={24} />}
-          <div>
-            <span className="eyebrow">Property analysis</span>
-            <h2>{isLoading ? 'Loading property analysis' : 'Property analysis unavailable'}</h2>
-            <p>{isLoading ? 'Retrieving current valuation, market history, and comparable properties.' : 'Use Analyze to retry the address-level valuation.'}</p>
-          </div>
-        </section>
-      )}
-
-      {hasLoadedAnalysis && (
-        <>
       <div className="dashboard-grid">
         <aside className="scenario-panel" aria-label="Property scenario controls">
           <div className="panel-heading">
@@ -449,8 +421,6 @@ function App() {
       </div>
 
       <footer className="footer"><span>Housing Market Lab</span><p>Estimates are informational and should not replace an appraisal or professional advice.</p><span>RentCast + Zillow data model</span></footer>
-        </>
-      )}
     </main>
   );
 }

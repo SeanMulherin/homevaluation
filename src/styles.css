@@ -61,11 +61,6 @@ button { cursor: pointer; }
 .is-spinning { animation: spin 0.9s linear infinite; }
 .load-alert { max-width: 1720px; margin: 14px auto -8px; padding: 11px clamp(18px, 3vw, 46px); display: flex; align-items: center; gap: 9px; color: #8d302d; font-size: 12px; font-weight: 650; }
 .load-alert svg { flex: 0 0 auto; }
-.initial-analysis-state { min-height: 420px; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 48px clamp(18px, 3vw, 46px); color: var(--green); background: var(--canvas); }
-.initial-analysis-state > svg { flex: 0 0 auto; }
-.initial-analysis-state h2 { margin: 5px 0 4px; color: var(--ink); font-size: 22px; letter-spacing: 0; }
-.initial-analysis-state p { margin: 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
-
 .dashboard-grid { display: grid; grid-template-columns: 270px minmax(0, 1fr); align-items: start; gap: 24px; max-width: 1720px; margin: 0 auto; padding: 24px clamp(18px, 3vw, 46px) 42px; }
 .scenario-panel { position: sticky; top: 86px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: var(--shadow); overflow: hidden; }
 .panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 19px 18px 15px; border-bottom: 1px solid var(--line); }

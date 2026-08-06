@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { dashboardDataFromApi, fetchAddressAnalysis } from './api';
+import {
+  dashboardDataFromApi,
+  fetchAddressAnalysis,
+  readCachedDashboard,
+  writeCachedDashboard,
+} from './api';
 
 const payload = {
   subject: {
@@ -55,5 +60,18 @@ describe('address analysis adapter', () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => payload });
     await fetchAddressAnalysis('1600 Pennsylvania Avenue NW, Washington, DC 20500', fetchImpl);
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body).address).toContain('Pennsylvania');
+  });
+
+  it('stores and restores dashboard data for instant repeat loads', () => {
+    const values = new Map();
+    const storage = {
+      getItem: (key) => values.get(key) || null,
+      setItem: (key, value) => values.set(key, value),
+    };
+    const dashboard = dashboardDataFromApi(payload, 'fallback address');
+
+    writeCachedDashboard('1600 Pennsylvania Avenue NW, Washington, DC 20500', dashboard, storage);
+
+    expect(readCachedDashboard('  1600  Pennsylvania Avenue NW, Washington, DC 20500 ', storage)).toEqual(dashboard);
   });
 });
