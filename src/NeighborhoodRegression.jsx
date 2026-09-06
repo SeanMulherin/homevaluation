@@ -85,10 +85,30 @@ export default function NeighborhoodRegression({ subject, comparables, source })
   const otherTypes = rows.filter((home) => home.propertyType !== subject.propertyType).length;
   const omitted = model.omitted.map(({ label, reason }) => `${label}: ${reason.toLowerCase()}`);
 
+  const modelPredictors = [
+    'Living area (square feet)', 'Number of bedrooms', 'Number of bathrooms',
+    'Lot size (acres)', 'Year built', '1 if active; 0 if inactive',
+    ...(selected.includes('distance') ? ['Distance from the subject (miles)'] : []),
+  ];
+
   return <section className="analysis-section regression-section" id="regression" aria-label="Neighborhood price regression">
     <div className="section-heading"><div><span className="eyebrow">Neighborhood price model</span><h2>Price and property characteristics</h2>
-      <p>Fit a multiple linear regression to geographically selected nearby listings. Each figure compares the subject home with the same filtered neighborhood set.</p>
+      <p>For nearby home <i>i</i>, we model listing price as a linear function of its observed characteristics. Ordinary least squares estimates the coefficients from complete observations, excluding the subject home; each slope represents a conditional association with price, holding the other included predictors fixed.</p>
     </div></div>
+    <div className="regression-model-intro">
+      <div className="regression-equation" role="region" aria-label="Regression model equation" tabIndex={0}>
+        <math display="block" aria-label={`y sub i equals beta zero ${modelPredictors.map((_, j) => `plus beta ${j + 1} times X sub i ${j + 1}`).join(' ')} plus epsilon sub i`}>
+          <mrow>
+            <msub><mi>y</mi><mi>i</mi></msub><mo>=</mo><msub><mi>β</mi><mn>0</mn></msub>
+            {modelPredictors.map((_, j) => <mrow key={j}><mo>+</mo><msub><mi>β</mi><mn>{j + 1}</mn></msub><msub><mi>X</mi><mrow><mi>i</mi><mn>{j + 1}</mn></mrow></msub></mrow>)}
+            <mo>+</mo><msub><mi>ε</mi><mi>i</mi></msub>
+          </mrow>
+        </math>
+      </div>
+      <p>Here, <i>y</i><sub>i</sub> is the listing price in USD, <i>β</i><sub>0</sub> is the intercept, and <i>ε</i><sub>i</sub> represents unexplained variation.</p>
+      <dl className="regression-predictor-definitions">{modelPredictors.map((definition, j) => <div key={j}><dt><i>X</i><sub>i{j + 1}</sub></dt><dd>{definition}</dd></div>)}</dl>
+      <p className="regression-model-scope">Unselected or non-estimable terms are omitted from the fitted model. Distance enters the specification when selected.</p>
+    </div>
     <div className="regression-filters">
       <label>Listings<select value={status} onChange={(event) => setStatus(event.target.value)}><option>All</option><option>Active</option><option>Inactive</option></select></label>
       {!source?.radius_miles && <label>Distance<select value={radius} onChange={(event) => setRadius(event.target.value)}><option value="all">All returned homes</option><option value="0.5">Within 0.5 mile</option><option value="1">Within 1 mile</option><option value="2">Within 2 miles</option><option value="5">Within 5 miles</option></select></label>}

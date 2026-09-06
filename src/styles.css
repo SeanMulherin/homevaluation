@@ -351,3 +351,14 @@ tbody tr:hover { background: #fbfcfa; }
 .data-freshness .data-freshness__warning, .data-freshness__warnings { color: #715622; line-height: 1.6; }
 .data-freshness :is(button, select, summary):focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
 @media (max-width: 650px) { .data-freshness__heading { flex-direction: column; } .data-freshness { padding: 16px; } .data-freshness dl > div { grid-template-columns: 1fr; gap: 4px; } }
+
+.regression-section .section-heading p { font-size: 16px; }
+.regression-model-intro { margin: -4px 0 24px; }
+.regression-model-intro p { margin: 10px 0; font-size: 14px; line-height: 1.6; color: var(--muted); }
+.regression-equation { overflow-x: auto; padding: 14px 4px; color: var(--ink); }
+.regression-equation math { width: max-content; min-width: 100%; margin: 0; font-size: 1.35rem; }
+.regression-equation:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+.regression-predictor-definitions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 8px 20px; margin: 14px 0; font-size: 14px; line-height: 1.5; }
+.regression-predictor-definitions > div { display: flex; align-items: baseline; gap: 10px; }
+.regression-predictor-definitions dt { flex: 0 0 32px; color: var(--ink); }
+.regression-predictor-definitions dd { margin: 0; color: var(--muted); }
