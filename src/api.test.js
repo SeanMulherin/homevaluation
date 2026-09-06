@@ -96,3 +96,29 @@ describe('address analysis adapter', () => {
     expect(readCachedDashboard('  1600  Pennsylvania Avenue NW, Washington, DC 20500 ', storage)).toEqual(dashboard);
   });
 });
+
+describe('regression source fields', () => {
+  it('preserves acreage, construction year, property identity and missing values', () => {
+    const data = dashboardDataFromApi({
+      subject: { bedrooms: null, square_footage: null, bathrooms: '', lot_size: null, year_built: null },
+      comparables: [
+        { id: 'unit-1', formatted_address: '1 Main St, Apt 1', price: 500000, square_footage: 1500, bedrooms: 0, bathrooms: null, lot_size: 43560, year_built: 1998, property_type: 'Condo' },
+        { price: 500000, square_footage: 1500, bedrooms: '', bathrooms: '', lot_size: null, year_built: null },
+      ],
+    }, 'Subject');
+    expect(data.comparables[0]).toMatchObject({ id: 'unit-1', fullAddress: '1 Main St, Apt 1', acres: 1, yearBuilt: 1998, beds: 0, baths: null, propertyType: 'Condo' });
+    expect(data.comparables[1]).toMatchObject({ acres: null, yearBuilt: null, beds: null, baths: null });
+    expect(data.subject.regressionFacts).toMatchObject({ sqft: null, beds: null, baths: null, acres: null, yearBuilt: null, status: 'Unknown' });
+  });
+});
+
+it('retains non-sqft listings for other factor plots and rejects boolean observations', () => {
+  const data = dashboardDataFromApi({ comparables: [
+    { price: 500000, square_footage: null, bedrooms: 3, year_built: 1990 },
+    { price: true, square_footage: true, bedrooms: 3 },
+  ] }, 'Subject');
+  expect(data.regressionComparables).toHaveLength(2);
+  expect(data.regressionComparables[0]).toMatchObject({ price: 500000, sqft: null, beds: 3, yearBuilt: 1990 });
+  expect(data.regressionComparables[1]).toMatchObject({ price: null, sqft: null });
+  expect(data.comparables).toHaveLength(0);
+});

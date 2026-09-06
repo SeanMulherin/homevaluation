@@ -1,5 +1,12 @@
 export const ANALYSIS_API_URL = 'https://web-app-housing.onrender.com/api/analysis';
-const ANALYSIS_CACHE_PREFIX = 'housing-market-lab:analysis:v3:';
+const ANALYSIS_CACHE_PREFIX = 'housing-market-lab:analysis:v4:';
+
+// Display defaults are not observations: keep missing fields null for regression.
+const observedNumber = (value) => {
+  if (value == null || typeof value === 'boolean' || String(value).trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 const safeNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -71,31 +78,47 @@ export function dashboardDataFromApi(payload, requestedAddress) {
     city: safeNumber(point.value),
     bedroom: hasBedroomSeries ? bedroomByDate.get(point.date) ?? null : null,
   }));
-  const comparables = (payload.comparables || [])
-    .filter((comparable) => comparable.price != null && comparable.square_footage != null)
+  const regressionComparables = (payload.comparables || [])
     .map((comparable, index) => {
       const comparableAddress = comparable.formatted_address || comparable.address_line_1 || `Comparable ${index + 1}`;
       const status = comparable.status || 'Unknown';
       return {
+        id: comparable.id || null,
         address: comparableAddress.split(',')[0],
         fullAddress: comparableAddress,
         location: locationFromAddress(comparableAddress),
         status,
         zillowUrl: status.toLowerCase() === 'active' ? zillowListingUrl(comparableAddress) : null,
-        price: safeNumber(comparable.price),
-        beds: safeNumber(comparable.bedrooms),
-        baths: safeNumber(comparable.bathrooms),
-        sqft: safeNumber(comparable.square_footage),
-        distance: safeNumber(comparable.distance),
+        price: observedNumber(comparable.price),
+        beds: observedNumber(comparable.bedrooms),
+        baths: observedNumber(comparable.bathrooms),
+        sqft: observedNumber(comparable.square_footage),
+        acres: observedNumber(comparable.lot_size) == null ? null : observedNumber(comparable.lot_size) / 43560,
+        yearBuilt: observedNumber(comparable.year_built),
+        propertyType: comparable.property_type || 'Unknown',
+        lastSeenDate: comparable.last_seen_date || null,
+        distance: observedNumber(comparable.distance),
         fit: safeNumber(comparable.correlation),
       };
     });
 
+  // The older size-based views need sqft; regression and factor plots retain every row.
+  const comparables = regressionComparables.filter((home) => home.price > 0 && home.sqft > 0);
   const squareFeet = safeNumber(rawSubject.square_footage, 2000);
   const lotSqft = safeNumber(rawSubject.lot_size);
   return {
     subject: {
+      id: rawSubject.id || null,
       address,
+      regressionFacts: {
+        sqft: observedNumber(rawSubject.square_footage),
+        beds: observedNumber(rawSubject.bedrooms),
+        baths: observedNumber(rawSubject.bathrooms),
+        acres: observedNumber(rawSubject.lot_size) == null ? null : observedNumber(rawSubject.lot_size) / 43560,
+        yearBuilt: observedNumber(rawSubject.year_built),
+        status: rawSubject.listing_status || 'Unknown',
+        distance: 0,
+      },
       city: rawSubject.city || market.location?.split(',')[0] || '',
       state: rawSubject.state || market.location?.split(',')[1]?.trim() || '',
       zip: rawSubject.zip_code || '',
@@ -128,6 +151,7 @@ export function dashboardDataFromApi(payload, requestedAddress) {
       history,
     },
     comparables,
+    regressionComparables,
     warnings: payload.warnings || [],
   };
 }

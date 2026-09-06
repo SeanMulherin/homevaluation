@@ -56,6 +56,7 @@ import {
   writeCachedDashboard,
 } from './api';
 import defaultAnalysis from './default-analysis.json';
+import NeighborhoodRegression from './NeighborhoodRegression';
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const compactMoney = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 });
@@ -96,7 +97,7 @@ function CompTooltip({ active, payload }) {
     <div className="chart-tooltip chart-tooltip--wide">
       <strong>{item.address}</strong>
       <span>{money.format(item.price)} | {number.format(item.sqft)} sqft</span>
-      <span>{item.beds} bd / {item.baths} ba | {item.distance.toFixed(2)} mi</span>
+      <span>{item.beds} bd / {item.baths} ba | {(item.distance == null ? 'Unknown' : item.distance.toFixed(2))} mi</span>
       <span>Fit score {(item.fit * 100).toFixed(0)}%</span>
     </div>
   );
@@ -335,6 +336,8 @@ function App() {
             <Metric icon={Activity} label="5-year market change" value={fiveYearLabel} detail={`${currentMarket.location} single-family index`} tone={fiveYearChange >= 0 ? 'positive' : 'default'} />
           </section>
 
+          <NeighborhoodRegression key={currentSubject.address} subject={currentSubject} comparables={dashboard.regressionComparables || dashboard.comparables} />
+
           <section className="analysis-section" id="market">
             <div className="section-heading">
               <div><span className="eyebrow">Market trajectory</span><h2>Value history and home-type context</h2><p>Compare the city index, available bedroom segment, and an indexed version of this property.</p></div>
@@ -445,7 +448,7 @@ function App() {
                       </a>
                     ) : <><strong>{comp.address}</strong><span>{comp.location || currentMarket.location}</span></>}</td>
                     <td><span className={`status-pill status-pill--${comp.status.toLowerCase()}`}>{comp.status}</span></td>
-                    <td>{money.format(comp.price)}</td><td>{money.format(comp.ppsf)}</td><td>{comp.beds} / {comp.baths.toFixed(1)}</td><td>{number.format(comp.sqft)} sqft</td><td>{comp.distance.toFixed(2)} mi</td><td><span className="fit-score">{(comp.fit * 100).toFixed(0)}%</span></td>
+                    <td>{money.format(comp.price)}</td><td>{money.format(comp.ppsf)}</td><td>{comp.beds} / {(comp.baths == null ? 'Unknown' : comp.baths.toFixed(1))}</td><td>{number.format(comp.sqft)} sqft</td><td>{(comp.distance == null ? 'Unknown' : comp.distance.toFixed(2))} mi</td><td><span className="fit-score">{(comp.fit * 100).toFixed(0)}%</span></td>
                   </tr>
                 )) : <tr><td colSpan="8" className="empty-table-cell">No comparable properties were returned for this address.</td></tr>}</tbody>
               </table>

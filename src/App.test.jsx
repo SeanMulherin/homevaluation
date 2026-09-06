@@ -18,3 +18,16 @@ describe('initial dashboard', () => {
     expect(markup).not.toContain('1818 Cross Staff Pl');
   });
 });
+
+it('shows the six factor figures and explains the bundled missing-data limits', () => {
+  const markup = renderToStaticMarkup(<App />);
+  for (const title of ['square footage', 'bedrooms', 'bathrooms', 'acres', 'year built', 'listing status']) {
+    expect(markup).toContain(`Price vs. ${title}`);
+  }
+  expect(markup).toContain('Leave-one-out RMSE');
+  expect(markup).toContain('Subject prediction unavailable');
+  expect(markup).toContain('15 missing this factor');
+  expect(markup).toContain('not a confirmed sale');
+  expect(markup).not.toContain('NaN');
+  expect(markup).not.toContain('Infinity');
+});
