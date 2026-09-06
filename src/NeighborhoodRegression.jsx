@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { CartesianGrid, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
+import { sourceDate } from './DataFreshness';
 import { FACTORS, factorAvailability, factorPlot, fitNeighborhoodModel, neighborhoodHomes, predictHome } from './regression';
 
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -19,6 +20,7 @@ function FactorTooltip({ active, payload, factor, priceLabel }) {
     <span>{point.isSubject ? priceLabel : 'Listed price'}: {showMoney(point.y)}</span>
     <span>{factor.label}: {formatX(factor, point.x)}</span>
     <span>{point.status || 'Unknown status'}{point.propertyType ? ` · ${point.propertyType}` : ''}</span>
+    {!point.isSubject && <span>Last seen active: {sourceDate(point.lastSeenDate)}</span>}
   </div>;
 }
 
@@ -51,18 +53,18 @@ function FactorChart({ factor, plot, yDomain, priceLabel, showLine }) {
   </figure>;
 }
 
-export default function NeighborhoodRegression({ subject, comparables }) {
+export default function NeighborhoodRegression({ subject, comparables, source }) {
   const neighborhood = useMemo(() => neighborhoodHomes(comparables, subject), [comparables, subject]);
   const [status, setStatus] = useState('All');
-  const [sameType, setSameType] = useState(false);
+  const [sameType, setSameType] = useState(Boolean(subject.propertyType && subject.propertyType !== 'Unknown'));
   const [radius, setRadius] = useState('all');
   const [selected, setSelected] = useState(() => factorAvailability(neighborhood.rows).filter((factor) => factor.defaultSelected).map(({ key }) => key));
   const [priceOverride, setPriceOverride] = useState('');
   const [showLine, setShowLine] = useState(true);
   const hasListingPrice = Number.isFinite(subject.listingPrice) && subject.listingPrice > 0;
-  const baselinePrice = hasListingPrice ? subject.listingPrice : subject.estimate;
+  const baselinePrice = hasListingPrice ? subject.listingPrice : subject.valuationSource === 'RentCast AVM' ? subject.estimate : null;
   const subjectPrice = priceOverride.trim() ? Number(priceOverride) : baselinePrice;
-  const priceLabel = priceOverride.trim() ? 'Entered subject price' : hasListingPrice ? 'Subject asking price' : 'Subject AVM / benchmark estimate';
+  const priceLabel = priceOverride.trim() ? 'Entered subject price' : hasListingPrice ? 'Subject asking price' : 'Subject AVM estimate';
   const profile = { ...subject.regressionFacts, address: subject.address, propertyType: subject.propertyType };
   const rows = useMemo(() => neighborhood.rows.filter((home) =>
     (status === 'All' || statusGroup(home) === status.toLowerCase()) &&
@@ -85,12 +87,12 @@ export default function NeighborhoodRegression({ subject, comparables }) {
 
   return <section className="analysis-section regression-section" id="regression" aria-label="Neighborhood price regression">
     <div className="section-heading"><div><span className="eyebrow">Neighborhood price model</span><h2>Price and property characteristics</h2>
-      <p>Fit a multiple linear regression to nearby listings. Each figure compares the subject home with the same filtered neighborhood set.</p>
+      <p>Fit a multiple linear regression to geographically selected nearby listings. Each figure compares the subject home with the same filtered neighborhood set.</p>
     </div></div>
     <div className="regression-filters">
       <label>Listings<select value={status} onChange={(event) => setStatus(event.target.value)}><option>All</option><option>Active</option><option>Inactive</option></select></label>
-      <label>Distance<select value={radius} onChange={(event) => setRadius(event.target.value)}><option value="all">All returned homes</option><option value="0.5">Within 0.5 mile</option><option value="1">Within 1 mile</option><option value="2">Within 2 miles</option><option value="5">Within 5 miles</option></select></label>
-      <label className="regression-check"><input type="checkbox" checked={sameType} onChange={(event) => setSameType(event.target.checked)} />Same property type as subject</label>
+      {!source?.radius_miles && <label>Distance<select value={radius} onChange={(event) => setRadius(event.target.value)}><option value="all">All returned homes</option><option value="0.5">Within 0.5 mile</option><option value="1">Within 1 mile</option><option value="2">Within 2 miles</option><option value="5">Within 5 miles</option></select></label>}
+      {!source?.property_type && <label className="regression-check"><input type="checkbox" checked={sameType} onChange={(event) => setSameType(event.target.checked)} />Same property type as subject</label>}
     </div>
     <fieldset className="regression-factors"><legend>Factors in the regression</legend>
       {availability.map((factor) => <label key={factor.key} className={factor.reason ? 'factor-unavailable' : ''}>
@@ -98,7 +100,10 @@ export default function NeighborhoodRegression({ subject, comparables }) {
         <span>{factor.label}<small>{factor.reason || `${factor.count}/${rows.length} reported`}</small></span>
       </label>)}
     </fieldset>
-    <p className="regression-context">{rows.length} of {neighborhood.rows.length} returned nearby homes · RentCast listed prices in USD. Inactive means no longer listed, not a confirmed sale. This selected comparable set is not a census of the neighborhood.</p>
+    {source?.status !== 'ok' && <p className="regression-note" role="status">{source?.error || 'Neighborhood listings are not available in this response. Refresh to retrieve them from the updated data service.'} The AVM’s selected comparables are not substituted for a neighborhood search.</p>}
+    <p className="regression-context">{rows.length} of {neighborhood.rows.length} returned neighborhood listings{source?.radius_miles ? ` within ${source.radius_miles} mile${source.radius_miles === 1 ? '' : 's'}` : ''}{source?.property_type ? ` · ${source.property_type}` : ''}{source?.max_age_days ? ` · last seen active within ${source.max_age_days} days` : ''}. RentCast listed prices in USD. Inactive means no longer listed, not a confirmed sale.</p>
+    {source?.has_more && <p className="regression-note">The search reached its retrieval limit. This is a partial neighborhood sample; reduce the radius to narrow the search.</p>}
+    {(source?.excluded_older > 0 || source?.excluded_missing_dates > 0) && <p className="regression-context">Excluded before modeling: {source.excluded_older || 0} older listings and {source.excluded_missing_dates || 0} listings without an observation date.</p>}
     {otherTypes > 0 && <p className="regression-note">{otherTypes} homes have a different or unknown property type from the subject ({subject.propertyType}). Use the property-type filter for a closer comparison.</p>}
     <div className="regression-stats" aria-label="Regression results" aria-live="polite">
       <div><span>{model.ok ? 'Homes used in model' : 'Complete homes for model'}</span><strong>{model.n} / {rows.length}</strong><small>{model.missingCount} missing selected factors</small></div>
@@ -126,7 +131,7 @@ export default function NeighborhoodRegression({ subject, comparables }) {
     </details>}
     <details className="regression-details"><summary>View homes behind the figures</summary>
       <p>The plots use each home with a known value for that figure. The regression uses homes with every included factor reported. {neighborhood.excluded.subject} subject records and {neighborhood.excluded.duplicates} repeated property records excluded; {neighborhood.excluded.price} records without a valid price excluded.</p>
-      <div className="table-wrap"><table><thead><tr><th>Property</th><th>Listed price</th><th>Status</th><th>Sqft</th><th>Beds</th><th>Baths</th><th>Acres</th><th>Year built</th><th>Model</th></tr></thead><tbody>{rows.map((home, i) => <tr key={home.id || `${home.fullAddress}-${i}`}><td>{home.fullAddress || home.address}</td><td>{showMoney(home.price)}</td><td>{home.status}</td>{['sqft', 'beds', 'baths', 'acres', 'yearBuilt'].map((key) => <td key={key}>{home[key] == null ? 'Unknown' : key === 'yearBuilt' ? home[key] : decimal.format(home[key])}</td>)}<td>{model.ok ? trainingSet.has(home) ? 'Included' : 'Missing factors' : 'Not fitted'}</td></tr>)}</tbody></table></div>
+      <div className="table-wrap"><table><thead><tr><th>Property</th><th>Listed price</th><th>Status</th><th>Sqft</th><th>Beds</th><th>Baths</th><th>Acres</th><th>Year built</th><th>Last seen active</th><th>Model</th></tr></thead><tbody>{rows.map((home, i) => <tr key={home.id || `${home.fullAddress}-${i}`}><td>{home.fullAddress || home.address}</td><td>{showMoney(home.price)}</td><td>{home.status}</td>{['sqft', 'beds', 'baths', 'acres', 'yearBuilt'].map((key) => <td key={key}>{home[key] == null ? 'Unknown' : key === 'yearBuilt' ? home[key] : decimal.format(home[key])}</td>)}<td>{sourceDate(home.lastSeenDate)}</td><td>{model.ok ? trainingSet.has(home) ? 'Included' : 'Missing factors' : 'Not fitted'}</td></tr>)}</tbody></table></div>
     </details>
   </section>;
 }

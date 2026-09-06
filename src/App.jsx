@@ -57,6 +57,7 @@ import {
 } from './api';
 import defaultAnalysis from './default-analysis.json';
 import NeighborhoodRegression from './NeighborhoodRegression';
+import DataFreshness from './DataFreshness';
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const compactMoney = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 });
@@ -110,7 +111,9 @@ function InputStepper({ label, value, min, max, step, suffix, onChange }) {
       <div className="field-control__input">
         <input
           type="number"
-          value={value}
+          value={value ?? ''}
+          disabled={value == null}
+          placeholder={value == null ? 'Not reported' : undefined}
           min={min}
           max={max}
           step={step}
@@ -127,7 +130,10 @@ function App() {
   const initialLoadStarted = useRef(false);
   const [query, setQuery] = useState(defaultSearchAddress);
   const [dashboard, setDashboard] = useState(initialDashboard);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [dataMode, setDataMode] = useState('snapshot');
+  const [neighborhoodRadius, setNeighborhoodRadius] = useState(1);
+  const [neighborhoodAge, setNeighborhoodAge] = useState(180);
   const [loadError, setLoadError] = useState('');
   const [scenario, setScenario] = useState({
     beds: initialDashboard.subject.beds,
@@ -145,9 +151,10 @@ function App() {
   const currentSubject = dashboard.subject;
   const currentMarket = dashboard.market;
   const estimate = useMemo(() => scenarioEstimate(currentSubject, scenario), [currentSubject, scenario]);
-  const rangeOffset = Math.max(0, (currentSubject.high - currentSubject.low) / 2);
-  const estimateLow = estimate - rangeOffset;
-  const estimateHigh = estimate + rangeOffset;
+  const hasRange = Number.isFinite(currentSubject.low) && Number.isFinite(currentSubject.high);
+  const scenarioOffset = estimate - currentSubject.estimate;
+  const estimateLow = hasRange ? currentSubject.low + scenarioOffset : null;
+  const estimateHigh = hasRange ? currentSubject.high + scenarioOffset : null;
   const filteredComps = useMemo(
     () => dashboard.comparables.filter((comp) => compStatus === 'All' || comp.status === compStatus),
     [dashboard.comparables, compStatus],
@@ -183,17 +190,20 @@ function App() {
     ? ((fiveYearHistory.at(-1).city / fiveYearHistory[0].city) - 1) * 100
     : 0;
 
-  const analyzeAddress = async (address, initial = false) => {
+  const analyzeAddress = async (address, initial = false, options = {}) => {
     const normalized = address.trim();
     if (!normalized) return;
     const requestId = ++requestSequence.current;
-    if (!initial) setIsLoading(true);
+    setIsLoading(true);
     setLoadError('');
     try {
-      const nextDashboard = await fetchAddressAnalysis(normalized);
+      const nextDashboard = await fetchAddressAnalysis(normalized, fetch, { radiusMiles: neighborhoodRadius, maxAgeDays: neighborhoodAge, ...options });
       if (requestId !== requestSequence.current) return;
       setDashboard(nextDashboard);
-      writeCachedDashboard(normalized, nextDashboard);
+      setDataMode('api');
+      if ((options.radiusMiles ?? neighborhoodRadius) === 1 && (options.maxAgeDays ?? neighborhoodAge) === 180) {
+        writeCachedDashboard(normalized, nextDashboard);
+      }
       setScenario({
         beds: nextDashboard.subject.beds,
         baths: nextDashboard.subject.baths,
@@ -205,11 +215,11 @@ function App() {
       setNotice(initial ? '' : `Analysis updated for ${nextDashboard.subject.address}.`);
       if (!initial) setTimeout(() => setNotice(''), 3600);
     } catch (error) {
-      if (requestId === requestSequence.current && !initial) {
+      if (requestId === requestSequence.current) {
         setLoadError(error.message || 'Address analysis could not be loaded.');
       }
     } finally {
-      if (requestId === requestSequence.current && !initial) setIsLoading(false);
+      if (requestId === requestSequence.current) setIsLoading(false);
     }
   };
 
@@ -219,6 +229,7 @@ function App() {
     const cachedDashboard = readCachedDashboard(defaultSearchAddress);
     if (cachedDashboard) {
       setDashboard(cachedDashboard);
+      setDataMode('cached');
       setScenario({
         beds: cachedDashboard.subject.beds,
         baths: cachedDashboard.subject.baths,
@@ -252,9 +263,8 @@ function App() {
     2,
     Math.min(98, compMaximum === compMinimum ? 50 : ((estimate - compMinimum) / (compMaximum - compMinimum)) * 100),
   );
-  const nearestDistance = filteredComps.length
-    ? Math.min(...filteredComps.map((comp) => comp.distance))
-    : null;
+  const reportedDistances = filteredComps.map((comp) => comp.distance).filter(Number.isFinite);
+  const nearestDistance = reportedDistances.length ? Math.min(...reportedDistances) : null;
   const fitScores = filteredComps.map((comp) => comp.fit).filter((value) => value > 0);
   const fitRange = fitScores.length
     ? `${Math.min(...fitScores).toFixed(2)} to ${Math.max(...fitScores).toFixed(2)}`
@@ -263,7 +273,7 @@ function App() {
   const fiveYearLabel = `${fiveYearChange >= 0 ? '+' : ''}${fiveYearChange.toFixed(1)}%`;
   const dealPercent = dealAssessment.discountPercent;
   const dealLabel = dealPercent == null
-    ? 'No active listing to compare'
+    ? ['error', 'unavailable'].includes(currentSubject.listingLookupStatus) ? 'Listing lookup unavailable' : 'No active listing to compare'
     : dealPercent >= 10
       ? 'Strong potential discount'
       : dealPercent >= 3
@@ -276,7 +286,7 @@ function App() {
   const dealTone = dealPercent == null ? 'neutral' : dealPercent >= 3 ? 'positive' : dealPercent <= -3 ? 'negative' : 'neutral';
   const listingDetail = currentSubject.listingPrice
     ? [currentSubject.listedDate !== 'Not available' ? `Listed ${currentSubject.listedDate}` : null, currentSubject.daysOnMarket ? `${currentSubject.daysOnMarket} days on market` : null].filter(Boolean).join(' | ') || 'Active RentCast sale listing'
-    : 'No active sale listing found';
+    : ['error', 'unavailable'].includes(currentSubject.listingLookupStatus) ? 'Listing lookup unavailable' : 'No active sale listing found';
 
   return (
     <main className="app-shell">
@@ -293,7 +303,7 @@ function App() {
       <section className="workspace-header" id="overview">
         <div className="workspace-header__copy">
           <div className="eyebrow"><span className="status-dot" /> Address-level market analysis</div>
-          <h1>Single-family home valuation</h1>
+          <h1>Home valuation and neighborhood analysis</h1>
         </div>
         <form className="address-search" onSubmit={runAnalysis}>
           <MapPin size={18} aria-hidden="true" />
@@ -303,7 +313,6 @@ function App() {
         {notice && <div className="toast" role="status"><Check size={16} />{notice}</div>}
       </section>
 
-      {loadError && <div className="load-alert" role="alert"><Info size={17} /><span>{loadError}</span></div>}
 
       <div className="dashboard-grid">
         <aside className="scenario-panel" aria-label="Property scenario controls">
@@ -328,15 +337,24 @@ function App() {
         </aside>
 
         <div className="analysis-canvas">
+          <DataFreshness dashboard={dashboard} mode={dataMode} loading={isLoading} error={loadError}
+            radius={neighborhoodRadius} maxAge={neighborhoodAge}
+            onRefresh={() => analyzeAddress(currentSubject.address, false, { forceRefresh: true })}
+            onScopeChange={(radiusMiles, maxAgeDays) => {
+              setNeighborhoodRadius(radiusMiles); setNeighborhoodAge(maxAgeDays);
+              void analyzeAddress(currentSubject.address, false, { radiusMiles, maxAgeDays });
+            }} />
           <section className="metrics-row" aria-label="Valuation summary">
-            <Metric icon={CircleDollarSign} label="Estimated value" value={moneyOrUnavailable(estimate)} detail={`${moneyOrUnavailable(estimateLow, true)} - ${moneyOrUnavailable(estimateHigh, true)} range`} tone="primary" />
+            <Metric icon={CircleDollarSign} label={currentSubject.valuationSource === 'Zillow market benchmark' ? 'Market fallback (no AVM)' : 'RentCast estimated value'} value={moneyOrUnavailable(estimate)} detail={hasRange ? `${moneyOrUnavailable(estimateLow, true)} - ${moneyOrUnavailable(estimateHigh, true)} range` : 'Valuation range not reported'} tone="primary" />
             <Metric icon={Building2} label="City benchmark" value={moneyOrUnavailable(currentSubject.marketBenchmark)} detail={`Zillow ZHVI | ${currentSubject.marketAsOf}`} />
             <Metric icon={TrendingUp} label="Market premium" value={premiumLabel} detail={`vs. ${currentMarket.location} SFR benchmark`} tone={premium >= 0 ? 'positive' : 'default'} />
             <Metric icon={BarChart3} label="Weighted comp value" value={moneyOrUnavailable(compSummary.weightedValue, true)} detail={`${compSummary.count} comparable properties`} />
             <Metric icon={Activity} label="5-year market change" value={fiveYearLabel} detail={`${currentMarket.location} single-family index`} tone={fiveYearChange >= 0 ? 'positive' : 'default'} />
           </section>
 
-          <NeighborhoodRegression key={currentSubject.address} subject={currentSubject} comparables={dashboard.regressionComparables || dashboard.comparables} />
+          <NeighborhoodRegression key={`${currentSubject.address}-${dashboard.neighborhood?.radius_miles}-${dashboard.neighborhood?.max_age_days}-${dashboard.neighborhood?.status}-${dashboard.freshness?.retrievedAt}`} subject={currentSubject}
+            comparables={dashboard.neighborhood?.status === 'ok' ? dashboard.neighborhood.listings : []}
+            source={dashboard.neighborhood} />
 
           <section className="analysis-section" id="market">
             <div className="section-heading">
@@ -365,7 +383,7 @@ function App() {
             </div>
             <div className="insight-strip">
               <div><Sparkles size={16} /><span><strong>Indexed value</strong> preserves the subject home's current premium while applying historical bedroom-segment movement.</span></div>
-              <div><CalendarDays size={16} /><span>Last source refresh: <strong>{currentSubject.valuationAsOf}</strong></span></div>
+              <div><CalendarDays size={16} /><span>AVM requested: <strong>{currentSubject.valuationAsOf}</strong></span></div>
             </div>
           </section>
 
@@ -384,7 +402,7 @@ function App() {
             <div className="comp-layout">
               <div className="chart-frame chart-frame--comps">
                 {!compChartData.length ? (
-                  <div className="empty-state"><Building2 size={24} /><strong>No residential comparables returned</strong><span>This address may be outside RentCast's single-family AVM coverage.</span></div>
+                  <div className="empty-state"><Building2 size={24} /><strong>No residential comparables returned</strong><span>This address may be outside RentCast's AVM coverage.</span></div>
                 ) : compView === 'scatter' ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <ScatterChart margin={{ top: 18, right: 26, bottom: 22, left: 8 }}>
@@ -392,12 +410,12 @@ function App() {
                       <XAxis type="number" dataKey="sqft" name="Square feet" unit=" sqft" tick={{ fill: '#66706a', fontSize: 12 }} tickFormatter={number.format} domain={['dataMin - 150', 'dataMax + 150']} label={{ value: 'Living area (sqft)', position: 'insideBottom', offset: -12, fill: '#66706a', fontSize: 12 }} />
                       <YAxis type="number" dataKey="price" name="Price" width={70} tickFormatter={compactMoney.format} tick={{ fill: '#66706a', fontSize: 12 }} domain={['dataMin - 80000', 'dataMax + 80000']} />
                       <Tooltip content={<CompTooltip />} cursor={{ strokeDasharray: '3 3' }} />
-                      <ReferenceArea y1={estimateLow} y2={estimateHigh} fill="#d9b45b" fillOpacity={0.13} />
+                      {hasRange && <ReferenceArea y1={estimateLow} y2={estimateHigh} fill="#d9b45b" fillOpacity={0.13} />}
                       <ReferenceLine y={estimate} stroke="#b7433f" strokeDasharray="6 5" label={{ value: `Subject ${compactMoney.format(estimate)}`, fill: '#8d302d', fontSize: 11, position: 'insideTopRight' }} />
                       <Scatter name="Comparables" data={compChartData} fill="#365b50" isAnimationActive={false}>
                         {compChartData.map((comp) => <Cell key={`${currentSubject.address}-${comp.fullAddress || comp.address}`} fill={comp.status === 'Active' ? '#d18b35' : '#5f746d'} />)}
                       </Scatter>
-                      <Scatter name="Subject" data={[{ address: 'Subject property', price: estimate, sqft: scenario.squareFeet, beds: scenario.beds, baths: scenario.baths, distance: 0, fit: 1 }]} fill="#b7433f" shape="diamond" isAnimationActive={false} />
+                      <Scatter name="Subject" data={scenario.squareFeet > 0 ? [{ address: 'Subject property', price: estimate, sqft: scenario.squareFeet, beds: scenario.beds, baths: scenario.baths, distance: 0, fit: 1 }] : []} fill="#b7433f" shape="diamond" isAnimationActive={false} />
                     </ScatterChart>
                   </ResponsiveContainer>
                 ) : (
@@ -407,7 +425,7 @@ function App() {
                       <XAxis type="number" tickFormatter={compactMoney.format} tick={{ fill: '#66706a', fontSize: 11 }} domain={['dataMin - 60000', 'dataMax + 80000']} />
                       <YAxis type="category" dataKey="shortAddress" width={132} tick={{ fill: '#59635e', fontSize: 10 }} interval={0} />
                       <Tooltip content={<CompTooltip />} />
-                      <ReferenceArea x1={estimateLow} x2={estimateHigh} fill="#d9b45b" fillOpacity={0.13} />
+                      {hasRange && <ReferenceArea x1={estimateLow} x2={estimateHigh} fill="#d9b45b" fillOpacity={0.13} />}
                       <ReferenceLine x={estimate} stroke="#b7433f" strokeWidth={2} />
                       <Bar dataKey="price" radius={[0, 3, 3, 0]} barSize={13} isAnimationActive={false}>
                         {[...compChartData].sort((a, b) => a.price - b.price).map((comp) => <Cell key={`${currentSubject.address}-${comp.fullAddress || comp.address}`} fill={comp.status === 'Active' ? '#d18b35' : '#5f746d'} />)}
@@ -441,7 +459,7 @@ function App() {
                         href={comp.zillowUrl}
                         target="_blank"
                         rel="noreferrer"
-                        aria-label={`Open active Zillow listing for ${comp.fullAddress}`}
+                        aria-label={`Search Zillow for ${comp.fullAddress}`}
                       >
                         <span><strong>{comp.address}</strong><small>{comp.location || currentMarket.location}</small></span>
                         <ExternalLink size={14} aria-hidden="true" />
@@ -458,10 +476,10 @@ function App() {
           <section className="property-facts">
             <div className="section-heading"><div><span className="eyebrow">Subject property</span><h2>Property facts</h2></div></div>
             <div className="facts-grid">
-              <div><BedDouble size={18} /><span>Beds / baths<strong>{scenario.beds} / {scenario.baths.toFixed(1)}</strong></span></div>
-              <div><Ruler size={18} /><span>Living area<strong>{number.format(scenario.squareFeet)} sqft</strong></span></div>
-              <div><LandPlot size={18} /><span>Lot size<strong>{scenario.acres.toFixed(2)} acres</strong></span></div>
-              <div><CalendarDays size={18} /><span>Year built<strong>{scenario.yearBuilt}</strong></span></div>
+              <div><BedDouble size={18} /><span>Beds / baths<strong>{scenario.beds ?? 'Unknown'} / {(scenario.baths == null ? 'Unknown' : scenario.baths.toFixed(1))}</strong></span></div>
+              <div><Ruler size={18} /><span>Living area<strong>{scenario.squareFeet == null ? 'Unknown' : `${number.format(scenario.squareFeet)} sqft`}</strong></span></div>
+              <div><LandPlot size={18} /><span>Lot size<strong>{(scenario.acres == null ? 'Unknown' : scenario.acres.toFixed(2))} acres</strong></span></div>
+              <div><CalendarDays size={18} /><span>Year built<strong>{scenario.yearBuilt ?? 'Unknown'}</strong></span></div>
               <div><CircleDollarSign size={18} /><span>Last sale<strong>{moneyOrUnavailable(currentSubject.lastSalePrice)}</strong></span></div>
               <div><Bath size={18} /><span>Last sale date<strong>{currentSubject.lastSaleDate}</strong></span></div>
             </div>

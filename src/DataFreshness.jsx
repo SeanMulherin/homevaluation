@@ -1,0 +1,43 @@
+import { useEffect, useState } from 'react';
+
+export function sourceDate(value) {
+  if (value == null || value === '') return 'Not reported';
+  const date = new Date(typeof value === 'number' ? value * 1000 : value);
+  return Number.isNaN(date.getTime()) ? 'Not reported' : new Intl.DateTimeFormat('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
+  }).format(date) + ' UTC';
+}
+
+export default function DataFreshness({ dashboard, mode, loading, error, onRefresh, radius, maxAge, onScopeChange }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(timer); }, []);
+  const freshness = dashboard.freshness || {};
+  const fetched = Date.parse(freshness.retrievedAt || freshness.receivedAt);
+  const age = Number.isFinite(fetched) ? Math.max(0, (now - fetched) / 1000) : null;
+  const expired = age != null && age >= (freshness.cacheTtlSeconds || 3600);
+  const label = mode === 'snapshot' ? 'Bundled sample' : mode === 'cached' ? 'Saved browser copy' : freshness.cacheStatus === 'hit' ? 'Server-cached analysis' : 'Retrieved analysis';
+  const sourceRows = Object.entries(freshness.marketSources || {}).filter(([, source]) => source);
+  return <section className="data-freshness" aria-label="Data sources and freshness">
+    <div className="data-freshness__heading"><div aria-live="polite"><strong>{label}{loading ? ' · Refreshing…' : expired ? ' · Refresh due' : ''}</strong>
+      <p>{mode === 'snapshot' ? `Snapshot dated ${dashboard.subject.valuationAsOf}. These are sample values until a data request succeeds.` : `Response received: ${sourceDate(freshness.receivedAt)}. Analysis generated: ${sourceDate(freshness.retrievedAt)}.`}</p>
+    </div><button type="button" onClick={onRefresh} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh latest data'}</button></div>
+    {error && <p className="data-freshness__error" role="alert">Refresh failed: {error} Displayed results remain for {dashboard.subject.address}.</p>}
+    {mode !== 'snapshot' && !freshness.metadataAvailable && <p className="data-freshness__warning">This backend does not report cache age or confirm a fresh source lookup. The response may be cached.</p>}
+    {expired && !loading && <p className="data-freshness__warning">This analysis is older than its refresh interval. Refresh before relying on current listing status.</p>}
+    <div className="data-freshness__scope">
+      <label>Neighborhood radius<select value={radius} disabled={loading} onChange={(event) => onScopeChange(Number(event.target.value), maxAge)}><option value="0.5">0.5 mile</option><option value="1">1 mile</option><option value="2">2 miles</option><option value="5">5 miles</option></select></label>
+      <label>Last seen on market<select value={maxAge} disabled={loading} onChange={(event) => onScopeChange(radius, Number(event.target.value))}><option value="30">Within 30 days</option><option value="90">Within 90 days</option><option value="180">Within 180 days</option><option value="365">Within 365 days</option></select></label>
+      <p>Prices and home facts: RentCast. City history: Zillow’s monthly index. Zillow and Redfin listing pages are separate sources.</p>
+    </div>
+    <details><summary>Source dates and retrieval details</summary>
+      <dl><div><dt>Analysis cache</dt><dd>{freshness.cacheStatus || 'Not reported'}{freshness.cacheAgeSeconds != null ? ` · ${Math.round(freshness.cacheAgeSeconds)} seconds old when served` : ' · age not reported'}</dd></div>
+        <div><dt>AVM requested</dt><dd>{sourceDate(freshness.valuationRequestedAt)}; request time is not a property-record update date.</dd></div>
+        <div><dt>Subject listing lookup</dt><dd>{dashboard.subject.listingLookupStatus}{dashboard.subject.listingLookupError ? `: ${dashboard.subject.listingLookupError}` : ''}</dd></div>
+        {sourceRows.map(([key, source]) => <div key={key}><dt>Zillow {key === 'sfr' ? 'single-family' : 'bedroom'} index</dt><dd>Data month: {source.latest_date || 'Not reported'} · File fetched: {sourceDate(source.fetched_at)}{source.stale ? ' · Stale fallback after failed refresh' : ''}{source.refresh_error ? ` · ${source.refresh_error}` : ''}</dd></div>)}
+        {!sourceRows.length && <div><dt>Zillow data month</dt><dd>{dashboard.subject.marketAsOf}; download timestamp not reported.</dd></div>}
+      </dl>
+    </details>
+    {sourceRows.some(([, source]) => source.stale) && <p className="data-freshness__warning">Zillow could not be refreshed. The market history uses a previously downloaded file; its date is shown above.</p>}
+    {dashboard.warnings?.length > 0 && <ul className="data-freshness__warnings">{dashboard.warnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul>}
+  </section>;
+}

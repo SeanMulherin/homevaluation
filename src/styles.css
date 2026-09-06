@@ -331,3 +331,23 @@ tbody tr:hover { background: #fbfcfa; }
 .regression-details td { font-size: 14px; }
 @media (max-width: 1150px) { .regression-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 500px) { .regression-section { padding: 16px 10px; } .regression-filters { align-items: stretch; } .regression-stats { gap: 14px; } .factor-chart, .factor-empty { height: 260px; } }
+
+.data-freshness { padding: 18px 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; font-size: 14px; }
+.data-freshness__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.data-freshness__heading strong { font-size: 16px; }
+.data-freshness p { margin: 6px 0; color: var(--muted); line-height: 1.6; }
+.data-freshness button { flex: 0 0 auto; color: white; background: var(--green); border: 0; border-radius: 4px; padding: 10px 13px; font-weight: 700; }
+.data-freshness button:disabled { opacity: .65; cursor: wait; }
+.data-freshness__scope { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; margin: 18px 0; }
+.data-freshness__scope label { display: flex; flex-direction: column; gap: 6px; }
+.data-freshness__scope select { padding: 9px; border: 1px solid var(--line); border-radius: 4px; background: white; color: var(--ink); }
+.data-freshness__scope p { flex: 1 1 230px; margin: 0; }
+.data-freshness details summary { color: var(--green); cursor: pointer; font-weight: 700; }
+.data-freshness dl { margin-bottom: 0; }
+.data-freshness dl > div { display: grid; grid-template-columns: minmax(100px, 180px) 1fr; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.data-freshness dt { color: var(--muted); }
+.data-freshness dd { margin: 0; overflow-wrap: anywhere; line-height: 1.5; }
+.data-freshness .data-freshness__error { color: #8d302d; border-left: 3px solid var(--red); padding-left: 10px; }
+.data-freshness .data-freshness__warning, .data-freshness__warnings { color: #715622; line-height: 1.6; }
+.data-freshness :is(button, select, summary):focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+@media (max-width: 650px) { .data-freshness__heading { flex-direction: column; } .data-freshness { padding: 16px; } .data-freshness dl > div { grid-template-columns: 1fr; gap: 4px; } }

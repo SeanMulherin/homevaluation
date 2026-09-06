@@ -122,3 +122,41 @@ it('retains non-sqft listings for other factor plots and rejects boolean observa
   expect(data.regressionComparables[1]).toMatchObject({ price: null, sqft: null });
   expect(data.comparables).toHaveLength(0);
 });
+
+it('expires browser data after an hour and rejects undated cache records', () => {
+  const values = new Map();
+  const storage = { getItem: (key) => values.get(key), setItem: (key, value) => values.set(key, value) };
+  writeCachedDashboard('test', { subject: {} }, storage);
+  expect(readCachedDashboard('test', storage)).toEqual({ subject: {} });
+  expect(readCachedDashboard('test', storage, Date.now() + 3600001)).toBeNull();
+  const key = [...values.keys()][0];
+  values.set(key, JSON.stringify({ dashboard: { subject: {} } }));
+  expect(readCachedDashboard('test', storage)).toBeNull();
+});
+
+it('separates neighborhood listings from AVM comparables and preserves source dates', () => {
+  const data = dashboardDataFromApi({ ...payload,
+    subject: { ...payload.subject, listing_lookup_status: 'error', listing_lookup_error: 'unavailable' },
+    neighborhood: { status: 'ok', radius_miles: 1, property_type: 'Single Family', listings: [{ id: 'nearby', price: 850000, square_footage: 2500, last_seen_date: '2026-09-06T12:00:00Z' }] },
+    data_freshness: { retrieved_at: '2026-09-06T13:00:00Z', cache_age_seconds: 300, cache_status: 'hit' },
+    market: { ...payload.market, sources: { sfr: { stale: true, latest_date: '2026-06-30' } } },
+  }, 'Subject');
+  expect(data.neighborhood.listings[0]).toMatchObject({ id: 'nearby', sqft: 2500, lastSeenDate: '2026-09-06T12:00:00Z' });
+  expect(data.comparables).toHaveLength(1);
+  expect(data.freshness).toMatchObject({ cacheStatus: 'hit', cacheAgeSeconds: 300, marketSources: { sfr: { stale: true, latest_date: '2026-06-30' } } });
+  expect(data.subject.listingLookupStatus).toBe('error');
+});
+
+it('preserves absent valuation ranges and does not turn a market month into a request timestamp', () => {
+  const data = dashboardDataFromApi({ subject: {}, valuation: { price: 450000, source: 'Zillow market benchmark', as_of: '2026-07-31' } }, 'Subject');
+  expect(data.subject.low).toBeNull();
+  expect(data.subject.high).toBeNull();
+  expect(data.freshness.valuationRequestedAt).toBeNull();
+});
+
+it('does not extend an old server analysis by saving it in the browser again', () => {
+  const values = new Map();
+  const storage = { getItem: (key) => values.get(key), setItem: (key, value) => values.set(key, value) };
+  writeCachedDashboard('test', { freshness: { retrievedAt: new Date(Date.now() - 3600001).toISOString() } }, storage);
+  expect(readCachedDashboard('test', storage)).toBeNull();
+});

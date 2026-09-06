@@ -1,5 +1,6 @@
-export const ANALYSIS_API_URL = 'https://web-app-housing.onrender.com/api/analysis';
-const ANALYSIS_CACHE_PREFIX = 'housing-market-lab:analysis:v4:';
+export const ANALYSIS_API_URL = '/api/analysis';
+export const DASHBOARD_CACHE_TTL_MS = 60 * 60 * 1000;
+const ANALYSIS_CACHE_PREFIX = 'housing-market-lab:analysis:v5:';
 
 // Display defaults are not observations: keep missing fields null for regression.
 const observedNumber = (value) => {
@@ -9,6 +10,7 @@ const observedNumber = (value) => {
 };
 
 const safeNumber = (value, fallback = 0) => {
+  if (value == null || String(value).trim() === '') return fallback;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
@@ -40,11 +42,16 @@ const browserStorage = (storage) => {
   return window.localStorage;
 };
 
-export function readCachedDashboard(address, storage) {
+export function readCachedDashboard(address, storage, now = Date.now()) {
   try {
     const value = browserStorage(storage)?.getItem(analysisCacheKey(address));
     if (!value) return null;
-    return JSON.parse(value)?.dashboard || null;
+    const record = JSON.parse(value);
+    const timestamp = Date.parse(record?.cachedAt);
+    if (!Number.isFinite(timestamp) || timestamp > now || now - timestamp >= DASHBOARD_CACHE_TTL_MS) return null;
+    const generated = record.dashboard?.freshness?.retrievedAt;
+    if (generated && (!Number.isFinite(Date.parse(generated)) || now - Date.parse(generated) >= DASHBOARD_CACHE_TTL_MS)) return null;
+    return record.dashboard || null;
   } catch {
     return null;
   }
@@ -78,8 +85,7 @@ export function dashboardDataFromApi(payload, requestedAddress) {
     city: safeNumber(point.value),
     bedroom: hasBedroomSeries ? bedroomByDate.get(point.date) ?? null : null,
   }));
-  const regressionComparables = (payload.comparables || [])
-    .map((comparable, index) => {
+  const normalizeComparable = (comparable, index) => {
       const comparableAddress = comparable.formatted_address || comparable.address_line_1 || `Comparable ${index + 1}`;
       const status = comparable.status || 'Unknown';
       return {
@@ -97,14 +103,20 @@ export function dashboardDataFromApi(payload, requestedAddress) {
         yearBuilt: observedNumber(comparable.year_built),
         propertyType: comparable.property_type || 'Unknown',
         lastSeenDate: comparable.last_seen_date || null,
+        listedDate: comparable.listed_date || null,
         distance: observedNumber(comparable.distance),
         fit: safeNumber(comparable.correlation),
       };
-    });
+    };
+  const regressionComparables = (payload.comparables || []).map(normalizeComparable);
+  const neighborhood = payload.neighborhood ? {
+    ...payload.neighborhood,
+    listings: (payload.neighborhood.listings || []).map(normalizeComparable),
+  } : null;
 
   // The older size-based views need sqft; regression and factor plots retain every row.
   const comparables = regressionComparables.filter((home) => home.price > 0 && home.sqft > 0);
-  const squareFeet = safeNumber(rawSubject.square_footage, 2000);
+  const squareFeet = observedNumber(rawSubject.square_footage);
   const lotSqft = safeNumber(rawSubject.lot_size);
   return {
     subject: {
@@ -122,19 +134,21 @@ export function dashboardDataFromApi(payload, requestedAddress) {
       city: rawSubject.city || market.location?.split(',')[0] || '',
       state: rawSubject.state || market.location?.split(',')[1]?.trim() || '',
       zip: rawSubject.zip_code || '',
-      propertyType: rawSubject.property_type || 'Single Family',
+      propertyType: rawSubject.property_type || 'Unknown',
       estimate,
-      low: safeNumber(valuation.price_range_low, estimate),
-      high: safeNumber(valuation.price_range_high, estimate),
-      beds: safeNumber(rawSubject.bedrooms, 3),
-      baths: safeNumber(rawSubject.bathrooms, 2),
+      low: observedNumber(valuation.price_range_low),
+      high: observedNumber(valuation.price_range_high),
+      beds: observedNumber(rawSubject.bedrooms),
+      baths: observedNumber(rawSubject.bathrooms),
       squareFeet,
       lotSqft,
-      acres: lotSqft ? lotSqft / 43560 : 0.15,
-      yearBuilt: safeNumber(rawSubject.year_built, 1990),
+      acres: lotSqft > 0 ? lotSqft / 43560 : null,
+      yearBuilt: observedNumber(rawSubject.year_built),
       lastSalePrice: safeNumber(rawSubject.last_sale_price),
       lastSaleDate: rawSubject.last_sale_date || 'Not available',
       listingStatus: rawSubject.listing_status || null,
+      listingLookupStatus: rawSubject.listing_lookup_status || 'unavailable',
+      listingLookupError: rawSubject.listing_lookup_error || null,
       listingPrice: safeNumber(rawSubject.listing_price),
       listedDate: displayMonth(rawSubject.listed_date),
       listingLastSeenDate: displayMonth(rawSubject.listing_last_seen_date),
@@ -150,13 +164,25 @@ export function dashboardDataFromApi(payload, requestedAddress) {
       hasBedroomSeries,
       history,
     },
+    freshness: {
+      retrievedAt: payload.data_freshness?.retrieved_at || null,
+      receivedAt: payload.data_freshness?.received_at || null,
+      cacheStatus: payload.data_freshness?.cache_status || 'unknown',
+      cacheAgeSeconds: payload.data_freshness?.cache_age_seconds ?? null,
+      cacheTtlSeconds: payload.data_freshness?.cache_ttl_seconds ?? null,
+      metadataAvailable: payload.data_freshness?.metadata_available ?? Boolean(payload.data_freshness?.retrieved_at),
+      refreshRequested: payload.data_freshness?.refresh_requested || false,
+      valuationRequestedAt: valuation.retrieved_at || null,
+      marketSources: market.sources || null,
+    },
+    neighborhood,
     comparables,
     regressionComparables,
     warnings: payload.warnings || [],
   };
 }
 
-export async function fetchAddressAnalysis(address, fetchImpl = fetch) {
+export async function fetchAddressAnalysis(address, fetchImpl = fetch, options = {}) {
   const response = await fetchImpl(ANALYSIS_API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -164,6 +190,9 @@ export async function fetchAddressAnalysis(address, fetchImpl = fetch) {
       address,
       period: '10',
       period_unit: 'year',
+      force_refresh: options.forceRefresh === true,
+      neighborhood_radius_miles: options.radiusMiles ?? 1,
+      neighborhood_max_age_days: options.maxAgeDays ?? 180,
     }),
   });
   const payload = await response.json();

@@ -1,12 +1,14 @@
 export const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
 
 export function scenarioEstimate(baseSubject, scenario) {
-  const sqftEffect = (scenario.squareFeet - baseSubject.squareFeet) * 182;
-  const bathEffect = (scenario.baths - baseSubject.baths) * 28500;
-  const bedEffect = (scenario.beds - baseSubject.beds) * 18000;
-  const acreEffect = (scenario.acres - baseSubject.acres) * 142000;
-  const yearEffect = (scenario.yearBuilt - baseSubject.yearBuilt) * 1700;
-  return Math.round(clamp(baseSubject.estimate + sqftEffect + bathEffect + bedEffect + acreEffect + yearEffect, 150000, 4000000) / 1000) * 1000;
+  if (!Number.isFinite(baseSubject.estimate) || baseSubject.estimate <= 0) return null;
+  const effects = { squareFeet: 182, baths: 28500, beds: 18000, acres: 142000, yearBuilt: 1700 };
+  const adjustment = Object.entries(effects).reduce((sum, [key, rate]) => (
+    Number.isFinite(baseSubject[key]) && Number.isFinite(scenario[key])
+      ? sum + (scenario[key] - baseSubject[key]) * rate : sum
+  ), 0);
+  if (adjustment === 0) return baseSubject.estimate;
+  return Math.max(0, Math.round((baseSubject.estimate + adjustment) / 1000) * 1000);
 }
 
 export function weightedComparableValue(comparables) {
@@ -36,7 +38,7 @@ export function summarizeComparables(comparables, subjectValue, subjectSqft) {
     medianPrice,
     medianPpsf,
     weightedValue,
-    subjectPpsf: subjectValue / subjectSqft,
+    subjectPpsf: subjectSqft > 0 ? subjectValue / subjectSqft : null,
     differenceFromMedian: medianPrice ? ((subjectValue / medianPrice) - 1) * 100 : null,
   };
 }

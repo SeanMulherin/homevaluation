@@ -45,3 +45,9 @@ describe('housing analytics', () => {
     expect(assessment.confidence).toBe('Medium');
   });
 });
+
+it('preserves the reported AVM exactly for an unchanged or incomplete scenario', () => {
+  const subject = { estimate: 6543210, squareFeet: null, baths: 2, beds: null, acres: null, yearBuilt: 1990 };
+  expect(scenarioEstimate(subject, { ...subject })).toBe(6543210);
+  expect(scenarioEstimate(subject, { ...subject, squareFeet: 2500 })).toBe(6543210);
+});
