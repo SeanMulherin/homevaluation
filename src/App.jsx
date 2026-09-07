@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Activity,
   BarChart3,
@@ -43,10 +43,7 @@ import {
 import {
   dashboardDataFromApi,
   fetchAddressAnalysis,
-  readCachedDashboard,
-  writeCachedDashboard,
 } from './api';
-import defaultAnalysis from './default-analysis.json';
 import NeighborhoodRegression from './NeighborhoodRegression';
 import DataFreshness from './DataFreshness';
 
@@ -56,8 +53,7 @@ const number = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const moneyOrUnavailable = (value, compact = false) => (
   Number.isFinite(value) && value > 0 ? (compact ? compactMoney : money).format(value) : 'Not available'
 );
-const defaultSearchAddress = '1600 Pennsylvania Avenue NW, Washington, DC 20500';
-const initialDashboard = dashboardDataFromApi(defaultAnalysis, defaultSearchAddress);
+const initialDashboard = dashboardDataFromApi({}, '');
 const addressKey = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 function Metric({ label, value, detail, tone = 'default', icon: Icon }) {
@@ -105,10 +101,11 @@ function InputStepper({ label, value, min, max, step, suffix, onChange }) {
 
 function App() {
   const requestSequence = useRef(0);
-  const initialLoadStarted = useRef(false);
+  const requestInFlight = useRef(false);
+  const [hasResults, setHasResults] = useState(false);
   const [query, setQuery] = useState('');
   const [dashboard, setDashboard] = useState(initialDashboard);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [dataMode, setDataMode] = useState('snapshot');
   const [neighborhoodRadius, setNeighborhoodRadius] = useState(1);
   const [neighborhoodAge, setNeighborhoodAge] = useState(180);
@@ -163,20 +160,19 @@ function App() {
     ? ((fiveYearHistory.at(-1).city / fiveYearHistory[0].city) - 1) * 100
     : 0;
 
-  const analyzeAddress = async (address, initial = false, options = {}) => {
+  const analyzeAddress = async (address) => {
     const normalized = address.trim();
-    if (!normalized) return;
+    if (!normalized || requestInFlight.current) return;
+    requestInFlight.current = true;
     const requestId = ++requestSequence.current;
     setIsLoading(true);
     setLoadError('');
     try {
-      const nextDashboard = await fetchAddressAnalysis(normalized, fetch, { radiusMiles: neighborhoodRadius, maxAgeDays: neighborhoodAge, ...options });
+      const nextDashboard = await fetchAddressAnalysis(normalized, fetch, { radiusMiles: neighborhoodRadius, maxAgeDays: neighborhoodAge });
       if (requestId !== requestSequence.current) return;
       setDashboard(nextDashboard);
       setDataMode('api');
-      if ((options.radiusMiles ?? neighborhoodRadius) === 1 && (options.maxAgeDays ?? neighborhoodAge) === 180) {
-        writeCachedDashboard(normalized, nextDashboard);
-      }
+      setHasResults(true);
       setScenario({
         beds: nextDashboard.subject.beds,
         baths: nextDashboard.subject.baths,
@@ -184,34 +180,16 @@ function App() {
         acres: nextDashboard.subject.acres,
         yearBuilt: nextDashboard.subject.yearBuilt,
       });
-      setNotice(initial ? '' : `Analysis updated for ${nextDashboard.subject.address}.`);
-      if (!initial) setTimeout(() => setNotice(''), 3600);
+      setNotice(`Analysis updated for ${nextDashboard.subject.address}.`);
+      setTimeout(() => setNotice(''), 3600);
     } catch (error) {
       if (requestId === requestSequence.current) {
         setLoadError(error.message || 'Address analysis could not be loaded.');
       }
     } finally {
-      if (requestId === requestSequence.current) setIsLoading(false);
+      if (requestId === requestSequence.current) { setIsLoading(false); requestInFlight.current = false; }
     }
   };
-
-  useEffect(() => {
-    if (initialLoadStarted.current) return;
-    initialLoadStarted.current = true;
-    const cachedDashboard = readCachedDashboard(defaultSearchAddress);
-    if (cachedDashboard) {
-      setDashboard(cachedDashboard);
-      setDataMode('cached');
-      setScenario({
-        beds: cachedDashboard.subject.beds,
-        baths: cachedDashboard.subject.baths,
-        squareFeet: cachedDashboard.subject.squareFeet,
-        acres: cachedDashboard.subject.acres,
-        yearBuilt: cachedDashboard.subject.yearBuilt,
-      });
-    }
-    void analyzeAddress(defaultSearchAddress, true);
-  }, []);
 
   const runAnalysis = (event) => {
     event.preventDefault();
@@ -256,16 +234,20 @@ function App() {
           <div className="eyebrow"><span className="status-dot" /> Address-level market analysis</div>
           <h1>Home valuation and neighborhood analysis</h1>
         </div>
+        <div className="address-entry">
         <form className="address-search" onSubmit={runAnalysis}>
           <MapPin size={18} aria-hidden="true" />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Property address" placeholder="Insert the full address of the house of interest..." />
-          <button type="submit" disabled={isLoading}>{isLoading ? <RefreshCw className="is-spinning" size={17} /> : <Search size={17} />}{isLoading ? 'Analyzing' : 'Analyze'}</button>
+          <input value={query} onChange={(event) => setQuery(event.target.value)} required aria-describedby={isLoading ? "analysis-progress" : undefined} aria-label="Property address" placeholder="Insert the full address of the house of interest..." />
+          <button type="submit" disabled={isLoading || !query.trim()}>{isLoading ? <RefreshCw className="is-spinning" size={17} /> : <Search size={17} />}{isLoading ? 'Analyzing' : 'Analyze'}</button>
         </form>
+        {isLoading && <p id="analysis-progress" className="analysis-progress" role="status"><Info size={18} aria-hidden="true" /><span>Your analysis is running. This may take 1–2 minutes.</span></p>}
+        {!hasResults && loadError && <p className="analysis-request-error" role="alert">{loadError} Please try again.</p>}
+        </div>
         {notice && <div className="toast" role="status"><Check size={16} />{notice}</div>}
       </section>
 
 
-      <div className="dashboard-grid">
+      {hasResults && <div className="dashboard-grid">
         <aside className="scenario-panel" aria-label="Property scenario controls">
           <div className="control-grid">
             <InputStepper label="Bedrooms" value={scenario.beds} min={1} max={8} step={1} suffix="beds" onChange={(value) => setScenario({ ...scenario, beds: value })} />
@@ -287,7 +269,7 @@ function App() {
             radius={neighborhoodRadius} maxAge={neighborhoodAge}
             onScopeChange={(radiusMiles, maxAgeDays) => {
               setNeighborhoodRadius(radiusMiles); setNeighborhoodAge(maxAgeDays);
-              void analyzeAddress(currentSubject.address, false, { radiusMiles, maxAgeDays });
+              setNotice('Neighborhood settings updated. Click Analyze to apply them.');
             }} />
           <section className="metrics-row" aria-label="Valuation summary">
             <Metric icon={CircleDollarSign} label={currentSubject.valuationSource === 'Zillow market benchmark' ? 'Market fallback (no AVM)' : 'RentCast estimated value'} value={moneyOrUnavailable(estimate)} detail={hasRange ? `${moneyOrUnavailable(estimateLow, true)} - ${moneyOrUnavailable(estimateHigh, true)} range` : 'Valuation range not reported'} tone="primary" />
@@ -358,7 +340,7 @@ function App() {
             <div className="deal-method"><Info size={15} /><span>Based on {dealAssessment.count} {activeDealComparables.length >= 3 ? 'active nearby listings' : 'nearby comparable properties'}. Active prices are seller expectations, not completed sale prices.</span></div>
           </section>
         </div>
-      </div>
+      </div>}
 
       <footer className="footer"><span>Housing Market Lab</span><p>Estimates are informational and should not replace an appraisal or professional advice.</p><span>RentCast + Zillow data model</span></footer>
     </main>

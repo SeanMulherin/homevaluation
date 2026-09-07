@@ -27,7 +27,7 @@ export async function proxyAnalysis(request, fetchImpl = fetch, backendUrl = HOU
   try {
     const response = await fetchImpl(backendUrl, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(body), signal: AbortSignal.timeout(60000), cache: 'no-store',
+      body: JSON.stringify(body), signal: AbortSignal.timeout(120000), cache: 'no-store',
     });
     const payload = await response.json();
     if (!response.ok) return json({ error: payload.error || 'Property data could not be refreshed.' }, response.status >= 500 ? 502 : 400);

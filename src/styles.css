@@ -382,3 +382,9 @@ tbody tr:hover { background: #fbfcfa; }
   .portfolio-nav-list a { font-size: .95rem; }
   .analysis-section, .property-facts, .deal-assessment { scroll-margin-top: 124px; }
 }
+
+.address-entry { min-width: 0; }
+.analysis-progress, .analysis-request-error { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 0; font-size: 14px; line-height: 1.5; }
+.analysis-progress { color: var(--muted); }
+.analysis-progress svg { flex-shrink: 0; margin-top: 2px; color: var(--green); }
+.analysis-request-error { color: var(--red); }

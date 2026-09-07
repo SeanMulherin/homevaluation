@@ -23,6 +23,7 @@
     "@cloudflare/vite-plugin": "^1.45.0",
     "@vitejs/plugin-react": "latest",
     "@vitejs/plugin-rsc": "latest",
+    "jsdom": "^30.0.1",
     "react-server-dom-webpack": "^19.2.6",
     "vinext": "latest",
     "vite": "^8.1.4",
