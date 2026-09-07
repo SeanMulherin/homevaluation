@@ -22,26 +22,31 @@ async function typeAddress(value) {
   });
 }
 async function submit() { await act(async () => container.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))); }
-it('starts empty and idle on the server and client, even with browser data', async () => {
+it('starts collapsed and idle on the server and client, even with browser data', async () => {
   const html = renderToStaticMarkup(<App />);
   expect(html).toContain('Insert the full address of the house of interest...');
-  expect(html).toContain('dashboard-grid');
-  expect(html).toContain('data-state="idle"');
-  expect(html).toContain('Regression pricing assessment');
-  expect(html).toContain('Price vs. square footage'); expect(html).not.toContain('Analyzing');
+  expect(html).not.toContain('dashboard-grid');
+  expect(html).not.toContain('Regression pricing assessment');
+  expect(html).not.toContain('Price vs. square footage'); expect(html).not.toContain('Analyzing');
   await act(async () => root.render(<App />));
+  expect(container.querySelector('.dashboard-grid')).toBeNull();
   expect(input().value).toBe(''); expect(container.querySelector('button[type="submit"]').disabled).toBe(true);
   expect(container.textContent).not.toContain('Old cached home'); expect(fetch).not.toHaveBeenCalled();
   await typeAddress('123 Test St, Washington, DC 20001');
   expect(fetch).not.toHaveBeenCalled(); expect(container.querySelector('button[type="submit"]').disabled).toBe(false);
+  expect(container.querySelector('.dashboard-grid')).toBeNull();
 });
 it('submits explicitly, announces the wait, prevents duplicates, and supports retry', async () => {
   let rejectRequest;
   fetch.mockImplementation(() => new Promise((resolve, reject) => { rejectRequest = reject; }));
   await act(async () => root.render(<App />));
   await typeAddress('   '); await submit(); expect(fetch).not.toHaveBeenCalled();
+  expect(container.querySelector('.dashboard-grid')).toBeNull();
   await typeAddress('123 Test St, Washington, DC 20001'); await submit();
   expect(fetch).toHaveBeenCalledTimes(1);
+  expect(container.querySelector('.dashboard-grid').getAttribute('data-state')).toBe('loading');
+  expect(container.querySelector('[aria-label="Regression pricing assessment"]')).not.toBeNull();
+  expect(container.textContent).toContain('Price vs. square footage');
   expect(JSON.parse(fetch.mock.calls[0][1].body).address).toBe('123 Test St, Washington, DC 20001');
   expect(container.querySelector('#analysis-progress').textContent).toContain('1–2 minutes');
   expect(input().getAttribute('aria-describedby')).toBe('analysis-progress');
@@ -60,7 +65,7 @@ it('shows results only after success and applies scope changes only on another s
   fetch.mockImplementation(() => new Promise(resolve => { complete = resolve; }));
   await act(async () => root.render(<App />));
   await typeAddress('123 Test St, Washington, DC 20001'); await submit();
-  expect(container.querySelector('.dashboard-grid').getAttribute('data-state')).toBe('idle');
+  expect(container.querySelector('.dashboard-grid').getAttribute('data-state')).toBe('loading');
   await act(async () => complete({ ok: true, json: async () => fixture }));
   expect(container.querySelector('.dashboard-grid').getAttribute('data-state')).toBe('ready');
   expect(container.querySelector('#analysis-progress')).toBeNull();

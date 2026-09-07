@@ -103,6 +103,7 @@ function App() {
   const requestSequence = useRef(0);
   const requestInFlight = useRef(false);
   const [hasResults, setHasResults] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
   const [query, setQuery] = useState('');
   const [dashboard, setDashboard] = useState(initialDashboard);
   const [isLoading, setIsLoading] = useState(false);
@@ -164,6 +165,7 @@ function App() {
     const normalized = address.trim();
     if (!normalized || requestInFlight.current) return;
     requestInFlight.current = true;
+    setHasSubmitted(true);
     const requestId = ++requestSequence.current;
     setIsLoading(true);
     setLoadError('');
@@ -247,8 +249,8 @@ function App() {
       </section>
 
 
-      {!hasResults && !isLoading && <p className="dashboard-awaiting">Enter an address and click Analyze to populate the metrics, model valuation, and figures below.</p>}
-      <div className="dashboard-grid" data-state={hasResults ? 'ready' : 'idle'}>
+      {!hasSubmitted && <p className="dashboard-awaiting">Enter an address and click Analyze to view the metrics, model valuation, and figures.</p>}
+      {hasSubmitted && <div className="dashboard-grid" data-state={isLoading ? 'loading' : hasResults ? 'ready' : 'idle'} aria-busy={isLoading}>
         <aside className="scenario-panel" aria-label="Property scenario controls">
           <div className="control-grid">
             <InputStepper label="Bedrooms" value={scenario.beds} min={1} max={8} step={1} suffix="beds" onChange={(value) => setScenario({ ...scenario, beds: value })} />
@@ -341,7 +343,7 @@ function App() {
             <div className="deal-method"><Info size={15} /><span>Based on {dealAssessment.count} {activeDealComparables.length >= 3 ? 'active nearby listings' : 'nearby comparable properties'}. Active prices are seller expectations, not completed sale prices.</span></div>
           </section>
         </div>
-      </div>
+      </div>}
 
       <footer className="footer"><span>Housing Market Lab</span><p>Estimates are informational and should not replace an appraisal or professional advice.</p><span>RentCast + Zillow data model</span></footer>
     </main>
