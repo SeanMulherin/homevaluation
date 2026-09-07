@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { CartesianGrid, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
 import { sourceDate } from './DataFreshness';
+import RegressionPricing from './RegressionPricing';
 import { FACTORS, factorAvailability, factorPlot, fitNeighborhoodModel, neighborhoodHomes, predictHome } from './regression';
 
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -108,22 +109,23 @@ export default function NeighborhoodRegression({ subject, comparables, source })
         <span>{factor.label}<small>{factor.reason || `${factor.count}/${rows.length} reported`}</small></span>
       </label>)}
     </fieldset>
-    {source?.status !== 'ok' && <p className="regression-note" role="status">{source?.error || 'Neighborhood listings are not available in this response. Refresh to retrieve them from the updated data service.'} The AVM’s selected comparables are not substituted for a neighborhood search.</p>}
+    {source?.status !== 'ok' && source?.status !== 'idle' && <p className="regression-note" role="status">{source?.error || 'Neighborhood listings are not available in this response. Refresh to retrieve them from the updated data service.'} The AVM’s selected comparables are not substituted for a neighborhood search.</p>}
     {source?.has_more && <p className="regression-note">The search reached its retrieval limit. This is a partial neighborhood sample; reduce the radius to narrow the search.</p>}
     {otherTypes > 0 && <p className="regression-note">{otherTypes} homes have a different or unknown property type from the subject ({subject.propertyType}).</p>}
     <div className="regression-stats" aria-label="Regression results" aria-live="polite">
       <div><span>{model.ok ? 'Homes used in model' : 'Complete homes for model'}</span><strong>{model.n} / {rows.length}</strong><small>{model.missingCount} missing selected factors</small></div>
-      <div><span>Subject model prediction</span><strong>{showMoney(prediction.value)}</strong><small>Fitted from nearby listed prices</small></div>
+      <div><span>Subject model prediction</span><strong>{showMoney(prediction.value > 0 ? prediction.value : null)}</strong><small>Fitted from nearby listed prices</small></div>
       <div><span>Adjusted R²</span><strong>{model.ok ? showR2(model.adjustedRSquared) : 'Unavailable'}</strong><small>Fit adjusted for number of factors</small></div>
       <div><span>Leave-one-out RMSE</span><strong>{model.ok ? showMoney(model.looRmse) : 'Unavailable'}</strong><small>Prediction error when holding out each home</small></div>
     </div>
-    {!model.ok && <p className="regression-note" role="status">{model.reason}</p>}
+    {!model.ok && source?.status !== 'idle' && <p className="regression-note" role="status">{model.reason}</p>}
     {omitted.length > 0 && <p className="regression-note">Omitted from this fit: {omitted.join('; ')}.</p>}
     {prediction.missing.length > 0 && <p className="regression-note">Subject prediction unavailable: missing {prediction.missing.join(', ').toLowerCase()}. Display defaults are not used as observed facts.</p>}
     {prediction.outside.length > 0 && <p className="regression-note">Subject outside the fitted neighborhood range for {prediction.outside.join(', ').toLowerCase()}. Any prediction extrapolates beyond these homes.</p>}
     {model.ok && model.n < 30 && <p className="regression-context">Small sample ({model.n} homes, {model.factors.length} factors). Coefficients can be sensitive to individual listings.</p>}
+    <RegressionPricing model={model} prediction={prediction} askingPrice={hasListingPrice ? subject.listingPrice : null}
+      priceOverride={priceOverride} onPriceChange={setPriceOverride} idle={source?.status === 'idle'} />
     <div className="regression-plot-controls">
-      <label>Subject price for figures (USD)<input type="number" min="1" step="1000" placeholder={Number.isFinite(baselinePrice) && baselinePrice > 0 ? String(baselinePrice) : 'Enter price'} value={priceOverride} onChange={(event) => setPriceOverride(event.target.value)} /></label>
       <p>{priceLabel}: <strong>{Number.isFinite(subjectPrice) && subjectPrice > 0 ? showMoney(subjectPrice) : 'Unavailable'}</strong>. Markers use reported property facts; the scenario controls above apply to the separate heuristic estimate.</p>
       <label className="regression-check"><input type="checkbox" checked={showLine} onChange={(event) => setShowLine(event.target.checked)} />Show adjusted model lines</label>
     </div>

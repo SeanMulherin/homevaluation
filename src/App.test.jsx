@@ -25,7 +25,10 @@ async function submit() { await act(async () => container.querySelector('form').
 it('starts empty and idle on the server and client, even with browser data', async () => {
   const html = renderToStaticMarkup(<App />);
   expect(html).toContain('Insert the full address of the house of interest...');
-  expect(html).not.toContain('dashboard-grid'); expect(html).not.toContain('Analyzing');
+  expect(html).toContain('dashboard-grid');
+  expect(html).toContain('data-state="idle"');
+  expect(html).toContain('Regression pricing assessment');
+  expect(html).toContain('Price vs. square footage'); expect(html).not.toContain('Analyzing');
   await act(async () => root.render(<App />));
   expect(input().value).toBe(''); expect(container.querySelector('button[type="submit"]').disabled).toBe(true);
   expect(container.textContent).not.toContain('Old cached home'); expect(fetch).not.toHaveBeenCalled();
@@ -47,7 +50,7 @@ it('submits explicitly, announces the wait, prevents duplicates, and supports re
   await act(async () => rejectRequest(new Error('Provider unavailable')));
   expect(container.querySelector('#analysis-progress')).toBeNull();
   expect(container.querySelector('[role="alert"]').textContent).toContain('Provider unavailable');
-  expect(container.querySelector('.dashboard-grid')).toBeNull();
+  expect(container.querySelector('.dashboard-grid').getAttribute('data-state')).toBe('idle');
   await submit(); expect(fetch).toHaveBeenCalledTimes(2);
   await act(async () => rejectRequest(new Error('Still unavailable')));
 });
@@ -57,9 +60,9 @@ it('shows results only after success and applies scope changes only on another s
   fetch.mockImplementation(() => new Promise(resolve => { complete = resolve; }));
   await act(async () => root.render(<App />));
   await typeAddress('123 Test St, Washington, DC 20001'); await submit();
-  expect(container.querySelector('.dashboard-grid')).toBeNull();
+  expect(container.querySelector('.dashboard-grid').getAttribute('data-state')).toBe('idle');
   await act(async () => complete({ ok: true, json: async () => fixture }));
-  expect(container.querySelector('.dashboard-grid')).not.toBeNull();
+  expect(container.querySelector('.dashboard-grid').getAttribute('data-state')).toBe('ready');
   expect(container.querySelector('#analysis-progress')).toBeNull();
   const radius = container.querySelector('.data-freshness__scope select');
   await act(async () => { radius.value = '2'; radius.dispatchEvent(new Event('change', { bubbles: true })); });

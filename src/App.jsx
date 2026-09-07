@@ -247,7 +247,8 @@ function App() {
       </section>
 
 
-      {hasResults && <div className="dashboard-grid">
+      {!hasResults && !isLoading && <p className="dashboard-awaiting">Enter an address and click Analyze to populate the metrics, model valuation, and figures below.</p>}
+      <div className="dashboard-grid" data-state={hasResults ? 'ready' : 'idle'}>
         <aside className="scenario-panel" aria-label="Property scenario controls">
           <div className="control-grid">
             <InputStepper label="Bedrooms" value={scenario.beds} min={1} max={8} step={1} suffix="beds" onChange={(value) => setScenario({ ...scenario, beds: value })} />
@@ -256,12 +257,12 @@ function App() {
             <InputStepper label="Lot size" value={scenario.acres} min={0.03} max={100} step={0.01} suffix="acres" onChange={(value) => setScenario({ ...scenario, acres: value })} />
             <InputStepper label="Year built" value={scenario.yearBuilt} min={1700} max={2026} step={1} suffix="year" onChange={(value) => setScenario({ ...scenario, yearBuilt: value })} />
           </div>
-          <div className="scenario-impact">
+          {hasResults && <div className="scenario-impact">
             <div><SlidersHorizontal size={16} /><span>Scenario impact</span></div>
             <strong className={estimate >= currentSubject.estimate ? 'positive' : 'negative'}>{estimate >= currentSubject.estimate ? '+' : ''}{money.format(estimate - currentSubject.estimate)}</strong>
             <small>Heuristic adjustment from address baseline</small>
-          </div>
-          <div className="source-note"><Info size={15} /><p><strong>{currentSubject.valuationSource}</strong> with Zillow market history. {dashboard.warnings[0] || 'Values are estimates, not an appraisal.'}</p></div>
+          </div>}
+          {hasResults && <div className="source-note"><Info size={15} /><p><strong>{currentSubject.valuationSource}</strong> with Zillow market history. {dashboard.warnings[0] || 'Values are estimates, not an appraisal.'}</p></div>}
         </aside>
 
         <div className="analysis-canvas">
@@ -274,14 +275,14 @@ function App() {
           <section className="metrics-row" aria-label="Valuation summary">
             <Metric icon={CircleDollarSign} label={currentSubject.valuationSource === 'Zillow market benchmark' ? 'Market fallback (no AVM)' : 'RentCast estimated value'} value={moneyOrUnavailable(estimate)} detail={hasRange ? `${moneyOrUnavailable(estimateLow, true)} - ${moneyOrUnavailable(estimateHigh, true)} range` : 'Valuation range not reported'} tone="primary" />
             <Metric icon={Building2} label="City benchmark" value={moneyOrUnavailable(currentSubject.marketBenchmark)} detail={`Zillow ZHVI | ${currentSubject.marketAsOf}`} />
-            <Metric icon={TrendingUp} label="Market premium" value={premiumLabel} detail={`vs. ${currentMarket.location} SFR benchmark`} tone={premium >= 0 ? 'positive' : 'default'} />
+            <Metric icon={TrendingUp} label="Market premium" value={hasResults ? premiumLabel : 'Unavailable'} detail={`vs. ${currentMarket.location} SFR benchmark`} tone={premium >= 0 ? 'positive' : 'default'} />
             <Metric icon={BarChart3} label="Weighted comp value" value={moneyOrUnavailable(compSummary.weightedValue, true)} detail={`${compSummary.count} comparable properties`} />
-            <Metric icon={Activity} label="5-year market change" value={fiveYearLabel} detail={`${currentMarket.location} single-family index`} tone={fiveYearChange >= 0 ? 'positive' : 'default'} />
+            <Metric icon={Activity} label="5-year market change" value={hasResults ? fiveYearLabel : 'Unavailable'} detail={`${currentMarket.location} single-family index`} tone={fiveYearChange >= 0 ? 'positive' : 'default'} />
           </section>
 
           <NeighborhoodRegression key={`${currentSubject.address}-${dashboard.neighborhood?.radius_miles}-${dashboard.neighborhood?.max_age_days}-${dashboard.neighborhood?.status}-${dashboard.freshness?.retrievedAt}`} subject={currentSubject}
             comparables={dashboard.neighborhood?.status === 'ok' ? dashboard.neighborhood.listings : []}
-            source={dashboard.neighborhood} />
+            source={hasResults ? dashboard.neighborhood : { status: 'idle' }} />
 
           <section className="analysis-section" id="market">
             <div className="section-heading">
@@ -340,7 +341,7 @@ function App() {
             <div className="deal-method"><Info size={15} /><span>Based on {dealAssessment.count} {activeDealComparables.length >= 3 ? 'active nearby listings' : 'nearby comparable properties'}. Active prices are seller expectations, not completed sale prices.</span></div>
           </section>
         </div>
-      </div>}
+      </div>
 
       <footer className="footer"><span>Housing Market Lab</span><p>Estimates are informational and should not replace an appraisal or professional advice.</p><span>RentCast + Zillow data model</span></footer>
     </main>
