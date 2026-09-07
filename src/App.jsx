@@ -103,7 +103,6 @@ function App() {
   const requestSequence = useRef(0);
   const requestInFlight = useRef(false);
   const [hasResults, setHasResults] = useState(false);
-  const [hasSubmitted, setHasSubmitted] = useState(false);
   const [query, setQuery] = useState('');
   const [dashboard, setDashboard] = useState(initialDashboard);
   const [isLoading, setIsLoading] = useState(false);
@@ -165,7 +164,6 @@ function App() {
     const normalized = address.trim();
     if (!normalized || requestInFlight.current) return;
     requestInFlight.current = true;
-    setHasSubmitted(true);
     const requestId = ++requestSequence.current;
     setIsLoading(true);
     setLoadError('');
@@ -249,7 +247,7 @@ function App() {
       </section>
 
 
-      {hasSubmitted && <div className="dashboard-grid" data-state={isLoading ? 'loading' : hasResults ? 'ready' : 'idle'} aria-busy={isLoading}>
+      {hasResults && !isLoading && <div className="dashboard-grid" data-state="ready">
         <aside className="scenario-panel" aria-label="Property scenario controls">
           <div className="control-grid">
             <InputStepper label="Bedrooms" value={scenario.beds} min={1} max={8} step={1} suffix="beds" onChange={(value) => setScenario({ ...scenario, beds: value })} />
