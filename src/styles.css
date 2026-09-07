@@ -362,3 +362,23 @@ tbody tr:hover { background: #fbfcfa; }
 .regression-predictor-definitions > div { display: flex; align-items: baseline; gap: 10px; }
 .regression-predictor-definitions dt { flex: 0 0 32px; color: var(--ink); }
 .regression-predictor-definitions dd { margin: 0; color: var(--muted); }
+
+/* Shared portfolio navigation. */
+.app-shell { padding-top: 60px; }
+.portfolio-header { position: fixed; top: 0; left: 0; width: 100%; height: 60px; background: #fff; z-index: 1000; box-shadow: 0 1px 0 rgba(0,0,0,.08); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.6; }
+.portfolio-nav-container { display: flex; justify-content: space-between; align-items: center; max-width: 1000px; margin: 0 auto; padding: 0 20px; height: 100%; }
+.portfolio-logo { font-size: 1.5em; font-weight: 500; text-decoration: none; color: #666; }
+.portfolio-nav-list { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 25px; }
+.portfolio-nav-list a { text-decoration: none; color: #555; font-size: 1em; transition: color .3s ease; }
+.portfolio-nav-list a:hover { color: #f2849e; }
+.portfolio-header a:focus-visible { outline: 2px solid var(--green); outline-offset: 4px; }
+.address-search input::placeholder { color: #929a96; opacity: 1; }
+@media (max-width: 900px) {
+  .app-shell { padding-top: 104px; }
+  .portfolio-header { height: 104px; padding: 12px 0; }
+  .portfolio-nav-container { align-items: flex-start; flex-direction: column; justify-content: center; gap: .35rem; }
+  .portfolio-header nav { width: 100%; }
+  .portfolio-nav-list { gap: .25rem 1rem; justify-content: flex-start; }
+  .portfolio-nav-list a { font-size: .95rem; }
+  .analysis-section, .property-facts, .deal-assessment { scroll-margin-top: 124px; }
+}

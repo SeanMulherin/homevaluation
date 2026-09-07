@@ -55,9 +55,6 @@ function FactorChart({ factor, plot, yDomain, priceLabel, showLine }) {
 
 export default function NeighborhoodRegression({ subject, comparables, source }) {
   const neighborhood = useMemo(() => neighborhoodHomes(comparables, subject), [comparables, subject]);
-  const [status, setStatus] = useState('All');
-  const [sameType, setSameType] = useState(Boolean(subject.propertyType && subject.propertyType !== 'Unknown'));
-  const [radius, setRadius] = useState('all');
   const [selected, setSelected] = useState(() => factorAvailability(neighborhood.rows).filter((factor) => factor.defaultSelected).map(({ key }) => key));
   const [priceOverride, setPriceOverride] = useState('');
   const [showLine, setShowLine] = useState(true);
@@ -66,11 +63,7 @@ export default function NeighborhoodRegression({ subject, comparables, source })
   const subjectPrice = priceOverride.trim() ? Number(priceOverride) : baselinePrice;
   const priceLabel = priceOverride.trim() ? 'Entered subject price' : hasListingPrice ? 'Subject asking price' : 'Subject AVM estimate';
   const profile = { ...subject.regressionFacts, address: subject.address, propertyType: subject.propertyType };
-  const rows = useMemo(() => neighborhood.rows.filter((home) =>
-    (status === 'All' || statusGroup(home) === status.toLowerCase()) &&
-    (!sameType || home.propertyType === subject.propertyType) &&
-    (radius === 'all' || (Number.isFinite(home.distance) && home.distance <= Number(radius)))
-  ), [neighborhood.rows, status, sameType, subject.propertyType, radius]);
+  const rows = neighborhood.rows;
   const availability = useMemo(() => factorAvailability(rows), [rows]);
   const model = useMemo(() => fitNeighborhoodModel(rows, selected), [rows, selected]);
   const prediction = predictHome(model, profile);
@@ -109,11 +102,6 @@ export default function NeighborhoodRegression({ subject, comparables, source })
       <dl className="regression-predictor-definitions">{modelPredictors.map((definition, j) => <div key={j}><dt><i>X</i><sub>i{j + 1}</sub></dt><dd>{definition}</dd></div>)}</dl>
       <p className="regression-model-scope">Unselected or non-estimable terms are omitted from the fitted model. Distance enters the specification when selected.</p>
     </div>
-    <div className="regression-filters">
-      <label>Listings<select value={status} onChange={(event) => setStatus(event.target.value)}><option>All</option><option>Active</option><option>Inactive</option></select></label>
-      {!source?.radius_miles && <label>Distance<select value={radius} onChange={(event) => setRadius(event.target.value)}><option value="all">All returned homes</option><option value="0.5">Within 0.5 mile</option><option value="1">Within 1 mile</option><option value="2">Within 2 miles</option><option value="5">Within 5 miles</option></select></label>}
-      {!source?.property_type && <label className="regression-check"><input type="checkbox" checked={sameType} onChange={(event) => setSameType(event.target.checked)} />Same property type as subject</label>}
-    </div>
     <fieldset className="regression-factors"><legend>Factors in the regression</legend>
       {availability.map((factor) => <label key={factor.key} className={factor.reason ? 'factor-unavailable' : ''}>
         <input type="checkbox" checked={selected.includes(factor.key)} disabled={Boolean(factor.reason) && !selected.includes(factor.key)} onChange={(event) => setSelected(event.target.checked ? [...selected, factor.key] : selected.filter((key) => key !== factor.key))} />
@@ -122,7 +110,7 @@ export default function NeighborhoodRegression({ subject, comparables, source })
     </fieldset>
     {source?.status !== 'ok' && <p className="regression-note" role="status">{source?.error || 'Neighborhood listings are not available in this response. Refresh to retrieve them from the updated data service.'} The AVM’s selected comparables are not substituted for a neighborhood search.</p>}
     {source?.has_more && <p className="regression-note">The search reached its retrieval limit. This is a partial neighborhood sample; reduce the radius to narrow the search.</p>}
-    {otherTypes > 0 && <p className="regression-note">{otherTypes} homes have a different or unknown property type from the subject ({subject.propertyType}). Use the property-type filter for a closer comparison.</p>}
+    {otherTypes > 0 && <p className="regression-note">{otherTypes} homes have a different or unknown property type from the subject ({subject.propertyType}).</p>}
     <div className="regression-stats" aria-label="Regression results" aria-live="polite">
       <div><span>{model.ok ? 'Homes used in model' : 'Complete homes for model'}</span><strong>{model.n} / {rows.length}</strong><small>{model.missingCount} missing selected factors</small></div>
       <div><span>Subject model prediction</span><strong>{showMoney(prediction.value)}</strong><small>Fitted from nearby listed prices</small></div>

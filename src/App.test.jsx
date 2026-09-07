@@ -7,7 +7,8 @@ describe('initial dashboard', () => {
   it('server-renders the bundled White House analysis immediately', () => {
     const markup = renderToStaticMarkup(<App />);
 
-    expect(markup).toContain('1600 Pennsylvania Avenue NW, Washington, DC 20500');
+    expect(markup).toContain('Insert the full address of the house of interest...');
+    expect(markup).toContain('https://seanmulherin.github.io/papers.html');
     expect(markup).toContain('Valuation summary');
     expect(markup).toContain('Washington, DC SFR benchmark');
     expect(markup).not.toContain('id="comparables"');

@@ -106,7 +106,7 @@ function InputStepper({ label, value, min, max, step, suffix, onChange }) {
 function App() {
   const requestSequence = useRef(0);
   const initialLoadStarted = useRef(false);
-  const [query, setQuery] = useState(defaultSearchAddress);
+  const [query, setQuery] = useState('');
   const [dashboard, setDashboard] = useState(initialDashboard);
   const [isLoading, setIsLoading] = useState(true);
   const [dataMode, setDataMode] = useState('snapshot');
@@ -213,12 +213,6 @@ function App() {
     void analyzeAddress(defaultSearchAddress, true);
   }, []);
 
-  const resetScenario = () => {
-    setScenario({ beds: currentSubject.beds, baths: currentSubject.baths, squareFeet: currentSubject.squareFeet, acres: currentSubject.acres, yearBuilt: currentSubject.yearBuilt });
-    setQuery(currentSubject.address);
-    setNotice('Property characteristics restored.');
-  };
-
   const runAnalysis = (event) => {
     event.preventDefault();
     void analyzeAddress(query);
@@ -245,14 +239,16 @@ function App() {
 
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="#overview" aria-label="Housing Market Lab home">
-          <span className="brand__mark"><Home size={19} strokeWidth={2.2} /></span>
-          <span>Housing Market Lab</span>
-        </a>
-        <a className="portfolio-link" href="https://seanmulherin.github.io/" target="_blank" rel="noreferrer">
-          SM Portfolio Home <ExternalLink size={14} />
-        </a>
+      <header className="portfolio-header">
+        <div className="portfolio-nav-container">
+          <a className="portfolio-logo" href="https://seanmulherin.github.io/" aria-label="Sean Mulherin home">SM</a>
+          <nav aria-label="Main navigation"><ul className="portfolio-nav-list">
+            <li><a href="https://seanmulherin.github.io/apps.html">Apps</a></li>
+            <li><a href="https://seanmulherin.github.io/papers.html">Scholarship</a></li>
+            <li><a href="https://seanmulherin.github.io/lectures.html">Teachings</a></li>
+            <li><a href="https://seanmulherin.github.io/resume.html">CV</a></li>
+          </ul></nav>
+        </div>
       </header>
 
       <section className="workspace-header" id="overview">
@@ -262,7 +258,7 @@ function App() {
         </div>
         <form className="address-search" onSubmit={runAnalysis}>
           <MapPin size={18} aria-hidden="true" />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Property address" placeholder="Enter a U.S. property address" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Property address" placeholder="Insert the full address of the house of interest..." />
           <button type="submit" disabled={isLoading}>{isLoading ? <RefreshCw className="is-spinning" size={17} /> : <Search size={17} />}{isLoading ? 'Analyzing' : 'Analyze'}</button>
         </form>
         {notice && <div className="toast" role="status"><Check size={16} />{notice}</div>}
@@ -271,11 +267,6 @@ function App() {
 
       <div className="dashboard-grid">
         <aside className="scenario-panel" aria-label="Property scenario controls">
-          <div className="panel-heading">
-            <div><span className="eyebrow">Subject profile</span><h2>Adjust the home</h2></div>
-            <button className="icon-button" onClick={resetScenario} title="Reset property scenario" aria-label="Reset property scenario"><RefreshCw size={17} /></button>
-          </div>
-          <div className="property-type"><Building2 size={17} /><span><small>Property type</small>{currentSubject.propertyType}</span><ChevronDown size={15} /></div>
           <div className="control-grid">
             <InputStepper label="Bedrooms" value={scenario.beds} min={1} max={8} step={1} suffix="beds" onChange={(value) => setScenario({ ...scenario, beds: value })} />
             <InputStepper label="Bathrooms" value={scenario.baths} min={1} max={50} step={0.5} suffix="baths" onChange={(value) => setScenario({ ...scenario, baths: value })} />
