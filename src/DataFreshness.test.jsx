@@ -6,10 +6,10 @@ const data = { subject: { address: '123 Test St', valuationAsOf: 'Aug 2026', mar
 const render = (props = {}) => renderToStaticMarkup(<DataFreshness dashboard={data} mode="snapshot" radius={1} maxAge={180} {...props} />);
 
 describe('visible source freshness', () => {
-  it('labels the bundled sample and shows failed initial refreshes', () => {
+  it('retains refresh errors after the summary header is removed', () => {
     const markup = render({ error: 'Could not reach provider' });
-    expect(markup).toContain('Bundled sample');
-    expect(markup).toContain('Snapshot dated Aug 2026');
+    expect(markup).not.toContain('data-freshness__heading');
+    expect(markup).not.toContain('Refresh latest data');
     expect(markup).toContain('Refresh failed:');
     expect(markup).toContain('Could not reach provider');
     expect(markup).toContain('Listing provider unavailable');
@@ -22,7 +22,7 @@ describe('visible source freshness', () => {
       retrievedAt: '2026-09-06T19:00:00Z', receivedAt: '2026-09-06T19:02:00Z',
       marketSources: { sfr: { latest_date: '2026-06-30', fetched_at: '2026-08-06T12:00:00Z', stale: true } },
     } } });
-    expect(markup).toContain('Server-cached analysis');
+    expect(markup).not.toContain('Server-cached analysis');
     expect(markup).toContain('120 seconds old');
     expect(markup).toContain('Stale fallback after failed refresh');
     expect(markup).toContain('2026-06-30');

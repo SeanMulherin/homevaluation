@@ -92,7 +92,7 @@ export default function NeighborhoodRegression({ subject, comparables, source })
   ];
 
   return <section className="analysis-section regression-section" id="regression" aria-label="Neighborhood price regression">
-    <div className="section-heading"><div><span className="eyebrow">Neighborhood price model</span><h2>Price and property characteristics</h2>
+    <div className="section-heading"><div><h2>Neighborhood Pricing Model</h2>
       <p>For nearby home <i>i</i>, we model listing price as a linear function of its observed characteristics. Ordinary least squares estimates the coefficients from complete observations, excluding the subject home; each slope represents a conditional association with price, holding the other included predictors fixed.</p>
     </div></div>
     <div className="regression-model-intro">
@@ -121,9 +121,7 @@ export default function NeighborhoodRegression({ subject, comparables, source })
       </label>)}
     </fieldset>
     {source?.status !== 'ok' && <p className="regression-note" role="status">{source?.error || 'Neighborhood listings are not available in this response. Refresh to retrieve them from the updated data service.'} The AVM’s selected comparables are not substituted for a neighborhood search.</p>}
-    <p className="regression-context">{rows.length} of {neighborhood.rows.length} returned neighborhood listings{source?.radius_miles ? ` within ${source.radius_miles} mile${source.radius_miles === 1 ? '' : 's'}` : ''}{source?.property_type ? ` · ${source.property_type}` : ''}{source?.max_age_days ? ` · last seen active within ${source.max_age_days} days` : ''}. RentCast listed prices in USD. Inactive means no longer listed, not a confirmed sale.</p>
     {source?.has_more && <p className="regression-note">The search reached its retrieval limit. This is a partial neighborhood sample; reduce the radius to narrow the search.</p>}
-    {(source?.excluded_older > 0 || source?.excluded_missing_dates > 0) && <p className="regression-context">Excluded before modeling: {source.excluded_older || 0} older listings and {source.excluded_missing_dates || 0} listings without an observation date.</p>}
     {otherTypes > 0 && <p className="regression-note">{otherTypes} homes have a different or unknown property type from the subject ({subject.propertyType}). Use the property-type filter for a closer comparison.</p>}
     <div className="regression-stats" aria-label="Regression results" aria-live="polite">
       <div><span>{model.ok ? 'Homes used in model' : 'Complete homes for model'}</span><strong>{model.n} / {rows.length}</strong><small>{model.missingCount} missing selected factors</small></div>

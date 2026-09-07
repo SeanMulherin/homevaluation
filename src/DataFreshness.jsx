@@ -8,19 +8,16 @@ export function sourceDate(value) {
   }).format(date) + ' UTC';
 }
 
-export default function DataFreshness({ dashboard, mode, loading, error, onRefresh, radius, maxAge, onScopeChange }) {
+export default function DataFreshness({ dashboard, mode, loading, error, radius, maxAge, onScopeChange }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(timer); }, []);
   const freshness = dashboard.freshness || {};
   const fetched = Date.parse(freshness.retrievedAt || freshness.receivedAt);
   const age = Number.isFinite(fetched) ? Math.max(0, (now - fetched) / 1000) : null;
   const expired = age != null && age >= (freshness.cacheTtlSeconds || 3600);
-  const label = mode === 'snapshot' ? 'Bundled sample' : mode === 'cached' ? 'Saved browser copy' : freshness.cacheStatus === 'hit' ? 'Server-cached analysis' : 'Retrieved analysis';
   const sourceRows = Object.entries(freshness.marketSources || {}).filter(([, source]) => source);
   return <section className="data-freshness" aria-label="Data sources and freshness">
-    <div className="data-freshness__heading"><div aria-live="polite"><strong>{label}{loading ? ' · Refreshing…' : expired ? ' · Refresh due' : ''}</strong>
-      <p>{mode === 'snapshot' ? `Snapshot dated ${dashboard.subject.valuationAsOf}. These are sample values until a data request succeeds.` : `Response received: ${sourceDate(freshness.receivedAt)}. Analysis generated: ${sourceDate(freshness.retrievedAt)}.`}</p>
-    </div><button type="button" onClick={onRefresh} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh latest data'}</button></div>
+
     {error && <p className="data-freshness__error" role="alert">Refresh failed: {error} Displayed results remain for {dashboard.subject.address}.</p>}
     {mode !== 'snapshot' && !freshness.metadataAvailable && <p className="data-freshness__warning">This backend does not report cache age or confirm a fresh source lookup. The response may be cached.</p>}
     {expired && !loading && <p className="data-freshness__warning">This analysis is older than its refresh interval. Refresh before relying on current listing status.</p>}

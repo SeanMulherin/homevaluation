@@ -12,12 +12,10 @@ import {
   ChevronDown,
   CircleDollarSign,
   ExternalLink,
-  Filter,
   Home,
   Info,
   LandPlot,
   MapPin,
-  Maximize2,
   RefreshCw,
   Ruler,
   Search,
@@ -26,19 +24,12 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import {
-  Bar,
-  BarChart,
   Brush,
   CartesianGrid,
-  Cell,
   ComposedChart,
   Legend,
   Line,
-  ReferenceArea,
-  ReferenceLine,
   ResponsiveContainer,
-  Scatter,
-  ScatterChart,
   Tooltip,
   XAxis,
   YAxis,
@@ -91,19 +82,6 @@ function ChartTooltip({ active, payload, label }) {
   );
 }
 
-function CompTooltip({ active, payload }) {
-  const item = active && payload?.[0]?.payload;
-  if (!item) return null;
-  return (
-    <div className="chart-tooltip chart-tooltip--wide">
-      <strong>{item.address}</strong>
-      <span>{money.format(item.price)} | {number.format(item.sqft)} sqft</span>
-      <span>{item.beds} bd / {item.baths} ba | {(item.distance == null ? 'Unknown' : item.distance.toFixed(2))} mi</span>
-      <span>Fit score {(item.fit * 100).toFixed(0)}%</span>
-    </div>
-  );
-}
-
 function InputStepper({ label, value, min, max, step, suffix, onChange }) {
   return (
     <label className="field-control">
@@ -144,8 +122,6 @@ function App() {
   });
   const [historyRange, setHistoryRange] = useState(10);
   const [showSubjectIndex, setShowSubjectIndex] = useState(true);
-  const [compStatus, setCompStatus] = useState('All');
-  const [compView, setCompView] = useState('scatter');
   const [notice, setNotice] = useState('');
 
   const currentSubject = dashboard.subject;
@@ -155,10 +131,7 @@ function App() {
   const scenarioOffset = estimate - currentSubject.estimate;
   const estimateLow = hasRange ? currentSubject.low + scenarioOffset : null;
   const estimateHigh = hasRange ? currentSubject.high + scenarioOffset : null;
-  const filteredComps = useMemo(
-    () => dashboard.comparables.filter((comp) => compStatus === 'All' || comp.status === compStatus),
-    [dashboard.comparables, compStatus],
-  );
+  const filteredComps = dashboard.comparables;
   const compSummary = useMemo(
     () => summarizeComparables(filteredComps, estimate, scenario.squareFeet),
     [filteredComps, estimate, scenario.squareFeet],
@@ -211,7 +184,6 @@ function App() {
         acres: nextDashboard.subject.acres,
         yearBuilt: nextDashboard.subject.yearBuilt,
       });
-      setCompStatus('All');
       setNotice(initial ? '' : `Analysis updated for ${nextDashboard.subject.address}.`);
       if (!initial) setTimeout(() => setNotice(''), 3600);
     } catch (error) {
@@ -252,23 +224,6 @@ function App() {
     void analyzeAddress(query);
   };
 
-  const compChartData = filteredComps.map((comp) => ({
-    ...comp,
-    shortAddress: comp.address.length > 22 ? `${comp.address.slice(0, 21)}...` : comp.address,
-    ppsf: Math.round(comp.price / comp.sqft),
-  }));
-  const compMinimum = filteredComps.length ? Math.min(...filteredComps.map((comp) => comp.price)) : estimate;
-  const compMaximum = filteredComps.length ? Math.max(...filteredComps.map((comp) => comp.price)) : estimate;
-  const compRangePosition = Math.max(
-    2,
-    Math.min(98, compMaximum === compMinimum ? 50 : ((estimate - compMinimum) / (compMaximum - compMinimum)) * 100),
-  );
-  const reportedDistances = filteredComps.map((comp) => comp.distance).filter(Number.isFinite);
-  const nearestDistance = reportedDistances.length ? Math.min(...reportedDistances) : null;
-  const fitScores = filteredComps.map((comp) => comp.fit).filter((value) => value > 0);
-  const fitRange = fitScores.length
-    ? `${Math.min(...fitScores).toFixed(2)} to ${Math.max(...fitScores).toFixed(2)}`
-    : 'Not available';
   const premiumLabel = `${premium >= 0 ? '+' : ''}${premium.toFixed(1)}%`;
   const fiveYearLabel = `${fiveYearChange >= 0 ? '+' : ''}${fiveYearChange.toFixed(1)}%`;
   const dealPercent = dealAssessment.discountPercent;
@@ -339,7 +294,6 @@ function App() {
         <div className="analysis-canvas">
           <DataFreshness dashboard={dashboard} mode={dataMode} loading={isLoading} error={loadError}
             radius={neighborhoodRadius} maxAge={neighborhoodAge}
-            onRefresh={() => analyzeAddress(currentSubject.address, false, { forceRefresh: true })}
             onScopeChange={(radiusMiles, maxAgeDays) => {
               setNeighborhoodRadius(radiusMiles); setNeighborhoodAge(maxAgeDays);
               void analyzeAddress(currentSubject.address, false, { radiusMiles, maxAgeDays });
@@ -384,92 +338,6 @@ function App() {
             <div className="insight-strip">
               <div><Sparkles size={16} /><span><strong>Indexed value</strong> preserves the subject home's current premium while applying historical bedroom-segment movement.</span></div>
               <div><CalendarDays size={16} /><span>AVM requested: <strong>{currentSubject.valuationAsOf}</strong></span></div>
-            </div>
-          </section>
-
-          <section className="analysis-section" id="comparables">
-            <div className="section-heading">
-              <div><span className="eyebrow">Comparable evidence</span><h2>Where the subject sits among nearby homes</h2><p>Inspect price, size, distance, listing status, and model fit together.</p></div>
-              <div className="chart-actions">
-                <div className="segmented segmented--icons" aria-label="Comparable chart type">
-                  <button className={compView === 'scatter' ? 'is-active' : ''} onClick={() => setCompView('scatter')} title="Price versus square feet"><Maximize2 size={15} />Scatter</button>
-                  <button className={compView === 'rank' ? 'is-active' : ''} onClick={() => setCompView('rank')} title="Ranked comparable prices"><BarChart3 size={15} />Rank</button>
-                </div>
-                <div className="filter-select"><Filter size={15} /><select value={compStatus} onChange={(event) => setCompStatus(event.target.value)} aria-label="Filter comparable properties by status"><option>All</option><option>Active</option><option>Inactive</option></select></div>
-              </div>
-            </div>
-
-            <div className="comp-layout">
-              <div className="chart-frame chart-frame--comps">
-                {!compChartData.length ? (
-                  <div className="empty-state"><Building2 size={24} /><strong>No residential comparables returned</strong><span>This address may be outside RentCast's AVM coverage.</span></div>
-                ) : compView === 'scatter' ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ScatterChart margin={{ top: 18, right: 26, bottom: 22, left: 8 }}>
-                      <CartesianGrid stroke="#dfe4df" strokeDasharray="3 4" />
-                      <XAxis type="number" dataKey="sqft" name="Square feet" unit=" sqft" tick={{ fill: '#66706a', fontSize: 12 }} tickFormatter={number.format} domain={['dataMin - 150', 'dataMax + 150']} label={{ value: 'Living area (sqft)', position: 'insideBottom', offset: -12, fill: '#66706a', fontSize: 12 }} />
-                      <YAxis type="number" dataKey="price" name="Price" width={70} tickFormatter={compactMoney.format} tick={{ fill: '#66706a', fontSize: 12 }} domain={['dataMin - 80000', 'dataMax + 80000']} />
-                      <Tooltip content={<CompTooltip />} cursor={{ strokeDasharray: '3 3' }} />
-                      {hasRange && <ReferenceArea y1={estimateLow} y2={estimateHigh} fill="#d9b45b" fillOpacity={0.13} />}
-                      <ReferenceLine y={estimate} stroke="#b7433f" strokeDasharray="6 5" label={{ value: `Subject ${compactMoney.format(estimate)}`, fill: '#8d302d', fontSize: 11, position: 'insideTopRight' }} />
-                      <Scatter name="Comparables" data={compChartData} fill="#365b50" isAnimationActive={false}>
-                        {compChartData.map((comp) => <Cell key={`${currentSubject.address}-${comp.fullAddress || comp.address}`} fill={comp.status === 'Active' ? '#d18b35' : '#5f746d'} />)}
-                      </Scatter>
-                      <Scatter name="Subject" data={scenario.squareFeet > 0 ? [{ address: 'Subject property', price: estimate, sqft: scenario.squareFeet, beds: scenario.beds, baths: scenario.baths, distance: 0, fit: 1 }] : []} fill="#b7433f" shape="diamond" isAnimationActive={false} />
-                    </ScatterChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={[...compChartData].sort((a, b) => a.price - b.price)} layout="vertical" margin={{ top: 12, right: 34, bottom: 12, left: 6 }}>
-                      <CartesianGrid stroke="#dfe4df" strokeDasharray="3 4" horizontal={false} />
-                      <XAxis type="number" tickFormatter={compactMoney.format} tick={{ fill: '#66706a', fontSize: 11 }} domain={['dataMin - 60000', 'dataMax + 80000']} />
-                      <YAxis type="category" dataKey="shortAddress" width={132} tick={{ fill: '#59635e', fontSize: 10 }} interval={0} />
-                      <Tooltip content={<CompTooltip />} />
-                      {hasRange && <ReferenceArea x1={estimateLow} x2={estimateHigh} fill="#d9b45b" fillOpacity={0.13} />}
-                      <ReferenceLine x={estimate} stroke="#b7433f" strokeWidth={2} />
-                      <Bar dataKey="price" radius={[0, 3, 3, 0]} barSize={13} isAnimationActive={false}>
-                        {[...compChartData].sort((a, b) => a.price - b.price).map((comp) => <Cell key={`${currentSubject.address}-${comp.fullAddress || comp.address}`} fill={comp.status === 'Active' ? '#d18b35' : '#5f746d'} />)}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-
-              <aside className="comp-summary">
-                <span className="eyebrow">Comparable signals</span>
-                <div className="signal"><span>Median comp</span><strong>{moneyOrUnavailable(compSummary.medianPrice)}</strong><small>{compSummary.differenceFromMedian == null ? 'Not available' : `${compSummary.differenceFromMedian >= 0 ? '+' : ''}${compSummary.differenceFromMedian.toFixed(1)}% subject vs median`}</small></div>
-                <div className="signal"><span>Median price / sqft</span><strong>{moneyOrUnavailable(compSummary.medianPpsf)}</strong><small>Subject: {moneyOrUnavailable(compSummary.subjectPpsf)} / sqft</small></div>
-                <div className="signal"><span>Nearest comp</span><strong>{nearestDistance == null ? 'Not available' : `${nearestDistance.toFixed(2)} mi`}</strong><small>Fit score range {fitRange}</small></div>
-                <div className="range-meter" aria-label="Subject estimate within comparable price range">
-                  <div className="range-meter__labels"><span>{moneyOrUnavailable(compMinimum, true)}</span><span>{moneyOrUnavailable(compMaximum, true)}</span></div>
-                  <div className="range-meter__track"><span style={{ left: `${compRangePosition}%` }} /></div>
-                  <small>Subject position in comp range</small>
-                </div>
-              </aside>
-            </div>
-
-            <div className="table-wrap">
-              <table>
-                <thead><tr><th>Comparable property</th><th>Status</th><th>Price</th><th>Price / sqft</th><th>Beds / baths</th><th>Living area</th><th>Distance</th><th>Fit</th></tr></thead>
-                <tbody>{compChartData.length ? compChartData.map((comp) => (
-                  <tr key={`${currentSubject.address}-${comp.fullAddress || comp.address}`}>
-                    <td>{comp.zillowUrl ? (
-                      <a
-                        className="comp-address-link"
-                        href={comp.zillowUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label={`Search Zillow for ${comp.fullAddress}`}
-                      >
-                        <span><strong>{comp.address}</strong><small>{comp.location || currentMarket.location}</small></span>
-                        <ExternalLink size={14} aria-hidden="true" />
-                      </a>
-                    ) : <><strong>{comp.address}</strong><span>{comp.location || currentMarket.location}</span></>}</td>
-                    <td><span className={`status-pill status-pill--${comp.status.toLowerCase()}`}>{comp.status}</span></td>
-                    <td>{money.format(comp.price)}</td><td>{money.format(comp.ppsf)}</td><td>{comp.beds} / {(comp.baths == null ? 'Unknown' : comp.baths.toFixed(1))}</td><td>{number.format(comp.sqft)} sqft</td><td>{(comp.distance == null ? 'Unknown' : comp.distance.toFixed(2))} mi</td><td><span className="fit-score">{(comp.fit * 100).toFixed(0)}%</span></td>
-                  </tr>
-                )) : <tr><td colSpan="8" className="empty-table-cell">No comparable properties were returned for this address.</td></tr>}</tbody>
-              </table>
             </div>
           </section>
 

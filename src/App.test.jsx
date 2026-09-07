@@ -10,7 +10,7 @@ describe('initial dashboard', () => {
     expect(markup).toContain('1600 Pennsylvania Avenue NW, Washington, DC 20500');
     expect(markup).toContain('Valuation summary');
     expect(markup).toContain('Washington, DC SFR benchmark');
-    expect(markup).toContain('Search Zillow for 2030 F St NW');
+    expect(markup).not.toContain('id="comparables"');
     expect(markup).toContain('Comparable deal assessment');
     expect(markup).toContain('Comp-supported value');
     expect(markup).not.toContain('Loading property analysis');
@@ -26,9 +26,11 @@ it('shows the six factor figures and explains the bundled missing-data limits', 
   }
   expect(markup).toContain('Leave-one-out RMSE');
   expect(markup).toContain('Neighborhood listings are not available in this response');
-  expect(markup).toContain('Bundled sample');
+  expect(markup).toContain('<h2>Neighborhood Pricing Model</h2>');
+  expect(markup).not.toContain('data-freshness__heading');
   expect(markup).toContain('Not reported');
-  expect(markup).toContain('not a confirmed sale');
+  expect(markup).not.toContain('returned neighborhood listings');
+  expect(markup).not.toContain('Excluded before modeling:');
   expect(markup).not.toContain('NaN');
   expect(markup).not.toContain('Infinity');
 });
