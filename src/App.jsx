@@ -234,7 +234,7 @@ function App() {
       <section className="workspace-header" id="overview">
         <div className="workspace-header__copy">
           <div className="eyebrow"><span className="status-dot" /> Address-level market analysis</div>
-          <h1>Home valuation and neighborhood analysis</h1>
+          <h1>Home and neighborhood valuation model</h1>
         </div>
         <div className="address-entry">
         <form className="address-search" onSubmit={runAnalysis}>
@@ -249,7 +249,6 @@ function App() {
       </section>
 
 
-      {!hasSubmitted && <p className="dashboard-awaiting">Enter an address and click Analyze to view the metrics, model valuation, and figures.</p>}
       {hasSubmitted && <div className="dashboard-grid" data-state={isLoading ? 'loading' : hasResults ? 'ready' : 'idle'} aria-busy={isLoading}>
         <aside className="scenario-panel" aria-label="Property scenario controls">
           <div className="control-grid">
