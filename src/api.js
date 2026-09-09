@@ -1,4 +1,5 @@
-export const ANALYSIS_API_URL = '/api/analysis';
+const CONFIGURED_ANALYSIS_API_URL = typeof __ANALYSIS_API_URL__ !== 'undefined' ? __ANALYSIS_API_URL__ : null;
+export const ANALYSIS_API_URL = CONFIGURED_ANALYSIS_API_URL || '/api/analysis';
 export const DASHBOARD_CACHE_TTL_MS = 60 * 60 * 1000;
 const ANALYSIS_CACHE_PREFIX = 'housing-market-lab:analysis:v5:';
 
