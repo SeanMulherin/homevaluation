@@ -8,7 +8,22 @@ export function sourceDate(value) {
   }).format(date) + ' UTC';
 }
 
-export default function DataFreshness({ dashboard, mode, loading, error, radius, maxAge, onScopeChange }) {
+export function NeighborhoodScopeControls({ loading, radius, maxAge, onScopeChange }) {
+  return <div className="neighborhood-scope-controls" aria-label="Neighborhood comparison settings">
+    <label>Neighborhood radius
+      <select value={radius} disabled={loading} onChange={(event) => onScopeChange(Number(event.target.value), maxAge)}>
+        <option value="0.5">0.5 mile</option><option value="1">1 mile</option><option value="2">2 miles</option><option value="5">5 miles</option>
+      </select>
+    </label>
+    <label>Last seen on market
+      <select value={maxAge} disabled={loading} onChange={(event) => onScopeChange(radius, Number(event.target.value))}>
+        <option value="30">Within 30 days</option><option value="90">Within 90 days</option><option value="180">Within 180 days</option><option value="365">Within 365 days</option>
+      </select>
+    </label>
+  </div>;
+}
+
+export default function DataFreshness({ dashboard, mode, loading, error }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(timer); }, []);
   const freshness = dashboard.freshness || {};
@@ -17,15 +32,10 @@ export default function DataFreshness({ dashboard, mode, loading, error, radius,
   const expired = age != null && age >= (freshness.cacheTtlSeconds || 3600);
   const sourceRows = Object.entries(freshness.marketSources || {}).filter(([, source]) => source);
   return <section className="data-freshness" aria-label="Data sources and freshness">
-
+    <p className="data-source-summary">Prices and home facts: RentCast. City history: Zillow’s monthly index. Zillow and Redfin listing pages are separate sources.</p>
     {error && <p className="data-freshness__error" role="alert">Refresh failed: {error} Displayed results remain for {dashboard.subject.address}.</p>}
     {mode !== 'snapshot' && !freshness.metadataAvailable && <p className="data-freshness__warning">This backend does not report cache age or confirm a fresh source lookup. The response may be cached.</p>}
     {expired && !loading && <p className="data-freshness__warning">This analysis is older than its refresh interval. Refresh before relying on current listing status.</p>}
-    <div className="data-freshness__scope">
-      <label>Neighborhood radius<select value={radius} disabled={loading} onChange={(event) => onScopeChange(Number(event.target.value), maxAge)}><option value="0.5">0.5 mile</option><option value="1">1 mile</option><option value="2">2 miles</option><option value="5">5 miles</option></select></label>
-      <label>Last seen on market<select value={maxAge} disabled={loading} onChange={(event) => onScopeChange(radius, Number(event.target.value))}><option value="30">Within 30 days</option><option value="90">Within 90 days</option><option value="180">Within 180 days</option><option value="365">Within 365 days</option></select></label>
-      <p>Prices and home facts: RentCast. City history: Zillow’s monthly index. Zillow and Redfin listing pages are separate sources.</p>
-    </div>
     <details><summary>Source dates and retrieval details</summary>
       <dl><div><dt>Analysis cache</dt><dd>{freshness.cacheStatus || 'Not reported'}{freshness.cacheAgeSeconds != null ? ` · ${Math.round(freshness.cacheAgeSeconds)} seconds old when served` : ' · age not reported'}</dd></div>
         <div><dt>AVM requested</dt><dd>{sourceDate(freshness.valuationRequestedAt)}; request time is not a property-record update date.</dd></div>
