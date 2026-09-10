@@ -73,7 +73,12 @@ it('shows results only after success and applies scope changes only on another s
   expect(container.querySelector('[aria-label="Regression pricing assessment"]')).not.toBeNull();
   expect(container.textContent).toContain('Price vs. square footage');
   expect(container.querySelector('#analysis-progress')).toBeNull();
-  const radius = container.querySelector('.data-freshness__scope select');
+  const sidebar = container.querySelector('.scenario-panel');
+  expect(sidebar.textContent).toContain('Neighborhood radius');
+  expect(sidebar.textContent).toContain('Last seen on market');
+  expect(sidebar.textContent.indexOf('Year built')).toBeLessThan(sidebar.textContent.indexOf('Neighborhood radius'));
+  expect(container.querySelector('.analysis-canvas').lastElementChild.classList.contains('data-freshness')).toBe(true);
+  const radius = container.querySelector('.neighborhood-scope-controls select');
   await act(async () => { radius.value = '2'; radius.dispatchEvent(new Event('change', { bubbles: true })); });
   expect(fetch).toHaveBeenCalledTimes(1);
   await submit(); expect(fetch).toHaveBeenCalledTimes(2);
