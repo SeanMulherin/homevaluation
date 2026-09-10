@@ -45,7 +45,7 @@ import {
   fetchAddressAnalysis,
 } from './api';
 import NeighborhoodRegression from './NeighborhoodRegression';
-import DataFreshness from './DataFreshness';
+import DataFreshness, { NeighborhoodScopeControls } from './DataFreshness';
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const compactMoney = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 });
@@ -254,6 +254,13 @@ function App() {
             <InputStepper label="Living area" value={scenario.squareFeet} min={500} max={100000} step={50} suffix="sqft" onChange={(value) => setScenario({ ...scenario, squareFeet: value })} />
             <InputStepper label="Lot size" value={scenario.acres} min={0.03} max={100} step={0.01} suffix="acres" onChange={(value) => setScenario({ ...scenario, acres: value })} />
             <InputStepper label="Year built" value={scenario.yearBuilt} min={1700} max={2026} step={1} suffix="year" onChange={(value) => setScenario({ ...scenario, yearBuilt: value })} />
+            <NeighborhoodScopeControls
+              loading={isLoading} radius={neighborhoodRadius} maxAge={neighborhoodAge}
+              onScopeChange={(radiusMiles, maxAgeDays) => {
+                setNeighborhoodRadius(radiusMiles); setNeighborhoodAge(maxAgeDays);
+                setNotice('Neighborhood settings updated. Click Analyze to apply them.');
+              }}
+            />
           </div>
           {hasResults && <div className="scenario-impact">
             <div><SlidersHorizontal size={16} /><span>Scenario impact</span></div>
@@ -264,12 +271,6 @@ function App() {
         </aside>
 
         <div className="analysis-canvas">
-          <DataFreshness dashboard={dashboard} mode={dataMode} loading={isLoading} error={loadError}
-            radius={neighborhoodRadius} maxAge={neighborhoodAge}
-            onScopeChange={(radiusMiles, maxAgeDays) => {
-              setNeighborhoodRadius(radiusMiles); setNeighborhoodAge(maxAgeDays);
-              setNotice('Neighborhood settings updated. Click Analyze to apply them.');
-            }} />
           <section className="metrics-row" aria-label="Valuation summary">
             <Metric icon={CircleDollarSign} label={currentSubject.valuationSource === 'Zillow market benchmark' ? 'Market fallback (no AVM)' : 'RentCast estimated value'} value={moneyOrUnavailable(estimate)} detail={hasRange ? `${moneyOrUnavailable(estimateLow, true)} - ${moneyOrUnavailable(estimateHigh, true)} range` : 'Valuation range not reported'} tone="primary" />
             <Metric icon={Building2} label="City benchmark" value={moneyOrUnavailable(currentSubject.marketBenchmark)} detail={`Zillow ZHVI | ${currentSubject.marketAsOf}`} />
@@ -338,6 +339,8 @@ function App() {
             </div>
             <div className="deal-method"><Info size={15} /><span>Based on {dealAssessment.count} {activeDealComparables.length >= 3 ? 'active nearby listings' : 'nearby comparable properties'}. Active prices are seller expectations, not completed sale prices.</span></div>
           </section>
+
+          <DataFreshness dashboard={dashboard} mode={dataMode} loading={isLoading} error={loadError} />
         </div>
       </div>}
 
