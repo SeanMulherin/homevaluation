@@ -24,7 +24,9 @@ async function typeAddress(value) {
 async function submit() { await act(async () => container.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))); }
 it('starts collapsed and idle on the server and client, even with browser data', async () => {
   const html = renderToStaticMarkup(<App />);
-  expect(html).toContain('Insert the full address of the house of interest...');
+  expect(html).toContain("Insert the full address of the house you&#x27;re interested in [Street address, City, ST ZIP]");
+  expect(html).not.toContain('Address-level market analysis');
+  expect(html).not.toContain('Housing Market Lab');
   expect(html).not.toContain('dashboard-grid');
   expect(html).not.toContain('Regression pricing assessment');
   expect(html).not.toContain('Price vs. square footage'); expect(html).not.toContain('Analyzing');
