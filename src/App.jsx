@@ -236,7 +236,7 @@ function App() {
         <div className="address-entry">
         <form className="address-search" onSubmit={runAnalysis}>
           <MapPin size={18} aria-hidden="true" />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} required aria-describedby={isLoading ? "analysis-progress" : undefined} aria-label="Property address" placeholder="Insert the full address of the house you're interested in [Street address, City, ST ZIP]" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} required aria-describedby={isLoading ? "analysis-progress" : undefined} aria-label="Property address" placeholder="Insert the full address [Street address, City, ST ZIP]" />
           <button type="submit" disabled={isLoading || !query.trim()}>{isLoading ? <RefreshCw className="is-spinning" size={17} /> : <Search size={17} />}{isLoading ? 'Analyzing' : 'Analyze'}</button>
         </form>
         {isLoading && <p id="analysis-progress" className="analysis-progress" role="status"><Info size={18} aria-hidden="true" /><span>Your analysis is running. This may take 1–2 minutes.</span></p>}
