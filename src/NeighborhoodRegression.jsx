@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { CartesianGrid, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
 import { sourceDate } from './DataFreshness';
 import RegressionPricing from './RegressionPricing';
-import { FACTORS, factorAvailability, factorPlot, fitNeighborhoodModel, neighborhoodHomes, predictHome } from './regression';
+import { FACTORS, defaultModelFactors, factorAvailability, factorPlot, factorValue, fitNeighborhoodModel, neighborhoodHomes, predictHome } from './regression';
 
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const compact = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 });
@@ -43,9 +43,11 @@ function FactorChart({ factor, plot, yDomain, priceLabel, showLine }) {
           <ZAxis range={[65, 65]} />
           <Tooltip content={<FactorTooltip factor={factor} priceLabel={priceLabel} />} cursor={{ strokeDasharray: '3 3' }} />
           {showLine && plot.line.length === 2 && <ReferenceLine segment={plot.line} stroke={palette.line} strokeDasharray="5 5" ifOverflow="hidden" />}
+          {showLine && plot.residual.length === 2 && <ReferenceLine segment={plot.residual} stroke={palette.subject} strokeWidth={2} ifOverflow="hidden" />}
           <Scatter name="Active listings" data={plot.points.filter((home) => statusGroup(home) === 'active')} fill={palette.active} fillOpacity={0.65} isAnimationActive={false} />
           <Scatter name="Inactive listings" data={plot.points.filter((home) => statusGroup(home) === 'inactive')} fill="white" stroke={palette.inactive} strokeWidth={1.8} isAnimationActive={false} />
           <Scatter name="Unknown status" data={plot.points.filter((home) => statusGroup(home) === 'unknown')} fill={palette.unknown} shape="triangle" isAnimationActive={false} />
+          {showLine && plot.fittedPoint && <Scatter name="OLS estimate" data={[plot.fittedPoint]} fill="white" stroke={palette.line} strokeWidth={2} shape="diamond" isAnimationActive={false} />}
           {plot.subjectPoint && <Scatter name="Subject home" data={[plot.subjectPoint]} fill={palette.subject} stroke="white" strokeWidth={1.5} shape="diamond" isAnimationActive={false} />}
         </ScatterChart>
       </ResponsiveContainer>
@@ -56,14 +58,14 @@ function FactorChart({ factor, plot, yDomain, priceLabel, showLine }) {
 
 export default function NeighborhoodRegression({ subject, comparables, source }) {
   const neighborhood = useMemo(() => neighborhoodHomes(comparables, subject), [comparables, subject]);
-  const [selected, setSelected] = useState(() => factorAvailability(neighborhood.rows).filter((factor) => factor.defaultSelected).map(({ key }) => key));
+  const profile = { ...subject.regressionFacts, address: subject.address, propertyType: subject.propertyType };
+  const [selected, setSelected] = useState(() => defaultModelFactors(neighborhood.rows, profile));
   const [priceOverride, setPriceOverride] = useState('');
   const [showLine, setShowLine] = useState(true);
   const hasListingPrice = Number.isFinite(subject.listingPrice) && subject.listingPrice > 0;
   const baselinePrice = hasListingPrice ? subject.listingPrice : subject.valuationSource === 'RentCast AVM' ? subject.estimate : null;
   const subjectPrice = priceOverride.trim() ? Number(priceOverride) : baselinePrice;
   const priceLabel = priceOverride.trim() ? 'Entered subject price' : hasListingPrice ? 'Subject asking price' : 'Subject AVM estimate';
-  const profile = { ...subject.regressionFacts, address: subject.address, propertyType: subject.propertyType };
   const rows = neighborhood.rows;
   const availability = useMemo(() => factorAvailability(rows), [rows]);
   const model = useMemo(() => fitNeighborhoodModel(rows, selected), [rows, selected]);
@@ -104,10 +106,14 @@ export default function NeighborhoodRegression({ subject, comparables, source })
       <p className="regression-model-scope">Unselected or non-estimable terms are omitted from the fitted model. Distance enters the specification when selected.</p>
     </div>
     <fieldset className="regression-factors"><legend>Factors in the regression</legend>
-      {availability.map((factor) => <label key={factor.key} className={factor.reason ? 'factor-unavailable' : ''}>
-        <input type="checkbox" checked={selected.includes(factor.key)} disabled={Boolean(factor.reason) && !selected.includes(factor.key)} onChange={(event) => setSelected(event.target.checked ? [...selected, factor.key] : selected.filter((key) => key !== factor.key))} />
-        <span>{factor.label}<small>{factor.reason || `${factor.count}/${rows.length} reported`}</small></span>
-      </label>)}
+      {availability.map((factor) => {
+        const subjectMissing = factorValue(profile, factor.key) == null;
+        const reason = factor.reason || (subjectMissing ? 'Not reported for subject home' : null);
+        return <label key={factor.key} className={reason ? 'factor-unavailable' : ''}>
+          <input type="checkbox" checked={selected.includes(factor.key)} disabled={Boolean(reason) && !selected.includes(factor.key)} onChange={(event) => setSelected(event.target.checked ? [...selected, factor.key] : selected.filter((key) => key !== factor.key))} />
+          <span>{factor.label}<small>{reason || `${factor.count}/${rows.length} reported`}</small></span>
+        </label>;
+      })}
     </fieldset>
     {source?.status !== 'ok' && source?.status !== 'idle' && <p className="regression-note" role="status">{source?.error || 'Neighborhood listings are not available in this response. Refresh to retrieve them from the updated data service.'} The AVM’s selected comparables are not substituted for a neighborhood search.</p>}
     {source?.has_more && <p className="regression-note">The search reached its retrieval limit. This is a partial neighborhood sample; reduce the radius to narrow the search.</p>}
@@ -123,14 +129,14 @@ export default function NeighborhoodRegression({ subject, comparables, source })
     {prediction.missing.length > 0 && <p className="regression-note">Subject prediction unavailable: missing {prediction.missing.join(', ').toLowerCase()}. Display defaults are not used as observed facts.</p>}
     {prediction.outside.length > 0 && <p className="regression-note">Subject outside the fitted neighborhood range for {prediction.outside.join(', ').toLowerCase()}. Any prediction extrapolates beyond these homes.</p>}
     {model.ok && model.n < 30 && <p className="regression-context">Small sample ({model.n} homes, {model.factors.length} factors). Coefficients can be sensitive to individual listings.</p>}
-    <RegressionPricing model={model} prediction={prediction} askingPrice={hasListingPrice ? subject.listingPrice : null}
+    <RegressionPricing model={model} prediction={prediction} comparisonPrice={baselinePrice} comparisonLabel={priceLabel}
       priceOverride={priceOverride} onPriceChange={setPriceOverride} idle={source?.status === 'idle'} />
     <div className="regression-plot-controls">
       <p>{priceLabel}: <strong>{Number.isFinite(subjectPrice) && subjectPrice > 0 ? showMoney(subjectPrice) : 'Unavailable'}</strong>. Markers use reported property facts; the scenario controls above apply to the separate heuristic estimate.</p>
       <label className="regression-check"><input type="checkbox" checked={showLine} onChange={(event) => setShowLine(event.target.checked)} />Show adjusted model lines</label>
     </div>
-    <div className="regression-legend" aria-label="Figure legend"><span><i className="legend-active" />Active</span><span><i className="legend-inactive" />Inactive</span><span><i className="legend-unknown" />Unknown status</span><span><i className="legend-subject" />Subject home</span>{showLine && <span><i className="legend-line" />Adjusted model</span>}</div>
-    <p className="regression-context">Every figure uses the same price axis. Points show observed listing prices; dashed lines hold other fitted factors at their neighborhood averages. Overlapping points may represent multiple homes.</p>
+    <div className="regression-legend" aria-label="Figure legend"><span><i className="legend-active" />Active</span><span><i className="legend-inactive" />Inactive</span><span><i className="legend-unknown" />Unknown status</span><span><i className="legend-subject" />Subject price</span>{showLine && <><span><i className="legend-fit" />OLS estimate</span><span><i className="legend-line" />Subject-specific OLS line</span></>}</div>
+    <p className="regression-context">Every figure uses the same price axis. Points show observed listing prices. Each dashed line holds the other fitted factors at the subject home's values; the vertical red segment is the above-or-below price gap reported in the estimator. Overlapping points may represent multiple homes.</p>
     <div className="factor-scroll" role="region" aria-label="Property factor figures, scroll horizontally" tabIndex={0}>{plottedFactors.map((factor, i) => <FactorChart key={factor.key} factor={factor} plot={plots[i]} yDomain={yDomain} priceLabel={priceLabel} showLine={showLine} />)}</div>
     {model.ok && <details className="regression-details"><summary>Model coefficients and fit details</summary>
       <p>Ordinary least squares with an intercept, using complete observations and excluding the subject. Effects below hold other factors fixed; they describe associations, not causal effects.</p>

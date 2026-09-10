@@ -310,6 +310,7 @@ tbody tr:hover { background: #fbfcfa; }
 .legend-inactive { border: 2px solid #73837b; border-radius: 50%; }
 .legend-unknown { background: #a6ada9; clip-path: polygon(50% 0%, 100% 100%, 0% 100%); }
 .legend-subject { background: #b7433f; transform: rotate(45deg); }
+.legend-fit { background: white; border: 2px solid #414b45; transform: rotate(45deg); }
 .regression-legend .legend-line { width: 22px; height: 0; border-top: 2px dashed #414b45; }
 .factor-scroll { display: grid; grid-auto-flow: column; grid-auto-columns: min(100%, 480px); gap: 24px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-color: #9aaba1 var(--surface-alt); margin: 22px 0; padding: 4px 2px 14px; }
 .factor-scroll:focus-visible { outline: 2px solid var(--green); outline-offset: 4px; }

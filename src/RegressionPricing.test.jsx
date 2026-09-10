@@ -5,7 +5,7 @@ import RegressionPricing, { regressionPriceComparison } from './RegressionPricin
 import { dashboardDataFromApi } from './api';
 import { factorAvailability, fitNeighborhoodModel, predictHome } from './regression';
 import fixture from './test-fixtures/analysis-contract.synthetic.json';
-const render = (props = {}) => renderToStaticMarkup(<RegressionPricing model={{ ok: true, n: 24, looRmse: 60000 }} prediction={{ value: 500000, missing: [], outside: [] }} askingPrice={450000} priceOverride="" onPriceChange={() => {}} {...props} />);
+const render = (props = {}) => renderToStaticMarkup(<RegressionPricing model={{ ok: true, n: 24, looRmse: 60000 }} prediction={{ value: 500000, missing: [], outside: [] }} comparisonPrice={450000} comparisonLabel="Subject asking price" priceOverride="" onPriceChange={() => {}} {...props} />);
 it('measures asking-price premiums and discounts against the model denominator', () => {
   expect(regressionPriceComparison(500000, 450000)).toEqual({ difference: -50000, percent: -10, direction: 'below' });
   expect(regressionPriceComparison(500000, 550000)).toEqual({ difference: 50000, percent: 10, direction: 'above' });
@@ -22,8 +22,17 @@ it('uses an entered price ahead of the observed asking price and flags error-sca
   expect(html).toContain('$50,000');
   expect(html).toContain('This difference is inconclusive');
 });
-it('does not invent a comparison price or substitute another estimate', () => {
-  const html = render({ askingPrice: null });
+it('shows signed dollar and percentage gaps', () => {
+  expect(render()).toContain('−$50,000');
+  expect(render()).toContain('−10%');
+  expect(render({ comparisonPrice: 550000 })).toContain('+$50,000');
+  expect(render({ comparisonPrice: 550000 })).toContain('+10%');
+});
+it('uses a clearly labeled AVM fallback without inventing a comparison price', () => {
+  const avm = render({ comparisonPrice: 480000, comparisonLabel: 'Subject AVM estimate' });
+  expect(avm).toContain('RentCast address-level estimate');
+  expect(avm).toContain('−4%');
+  const html = render({ comparisonPrice: null });
   expect(html).toContain('$500,000');
   expect(html).toContain('Not provided');
   expect(html).not.toContain('Potentially undervalued');
@@ -49,7 +58,7 @@ it('uses the actual fitted subject prediction and flags extrapolation', () => {
   const model = fitNeighborhoodModel(rows, selected);
   const prediction = predictHome(model, dashboard.subject.regressionFacts);
   expect(model.ok).toBe(true);
-  const html = render({ model, prediction: { ...prediction, outside: ['Square footage'] }, askingPrice: prediction.value * 0.9 });
+  const html = render({ model, prediction: { ...prediction, outside: ['Square footage'] }, comparisonPrice: prediction.value * 0.9 });
   expect(html).toContain('10% below');
   expect(html).toContain('extrapolates beyond the observed range');
 });

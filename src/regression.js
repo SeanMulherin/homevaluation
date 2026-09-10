@@ -134,6 +134,21 @@ export function fitNeighborhoodModel(rows, selectedKeys) {
     rmse: Math.sqrt(sse / n), looRmse, degreesOfFreedom: n - p };
 }
 
+// Prefer a useful subject estimate over a larger model that cannot score the subject.
+// Add default factors only while the complete-case fit remains estimable; if none of
+// the usual defaults are observed for the subject, fall back to its best-covered factor.
+export function defaultModelFactors(rows, home) {
+  const availability = factorAvailability(rows);
+  const supported = availability.filter(({ key, reason }) => !reason && factorValue(home, key) != null);
+  const preferred = supported.filter(({ defaultSelected }) => defaultSelected);
+  const candidates = preferred.length
+    ? preferred
+    : [...supported].sort((a, b) => b.count - a.count).slice(0, 1);
+  return candidates.reduce((selected, factor) => (
+    fitNeighborhoodModel(rows, [...selected, factor.key]).ok ? [...selected, factor.key] : selected
+  ), []);
+}
+
 export function predictHome(model, home) {
   if (!model.ok) return { value: null, missing: [], outside: [] };
   const missing = model.factors.filter(({ key }) => factorValue(home, key) == null).map(({ label }) => label);
@@ -155,9 +170,26 @@ export function factorPlot(rows, subject, subjectPrice, factor, model) {
   const subjectPoint = subjectX != null && Number.isFinite(subjectPrice) && subjectPrice > 0
     ? { ...subject, x: subjectX, y: subjectPrice, isSubject: true } : null;
   const coefficient = model.ok && model.coefficients.find(({ key }) => key === factor.key);
-  // A conditional slice through the multiple regression, holding others at training means.
-  const line = coefficient && factor.key !== 'active' ? [coefficient.min, coefficient.max].map((x) => ({
-    x, y: model.intercept + model.coefficients.reduce((sum, term) => sum + term.value * (term.key === factor.key ? x : term.center), 0),
-  })) : [];
-  return { points, subjectPoint, line, missingCount: rows.length - points.length, subjectX };
+  const hasSubjectProfile = model.ok && model.factors.every(({ key }) => key === factor.key || factorValue(subject, key) != null);
+  // A conditional slice through the multiple regression at this subject's actual
+  // characteristics, so its fitted point is the same value used by the price panel.
+  const line = coefficient && factor.key !== 'active' && subjectX != null && hasSubjectProfile
+    ? [
+      Math.min(coefficient.min, subjectX), Math.max(coefficient.max, subjectX),
+    ].map((x) => ({
+      x,
+      y: model.intercept + model.coefficients.reduce((sum, term) => (
+        sum + term.value * (term.key === factor.key ? x : factorValue(subject, term.key))
+      ), 0),
+    })) : [];
+  const fittedPoint = line.length && subjectX != null ? {
+    ...subject,
+    x: subjectX,
+    y: model.intercept + model.coefficients.reduce((sum, term) => sum + term.value * factorValue(subject, term.key), 0),
+    isFitted: true,
+  } : null;
+  const residual = subjectPoint && fittedPoint
+    ? [{ x: subjectX, y: fittedPoint.y }, { x: subjectX, y: subjectPoint.y }]
+    : [];
+  return { points, subjectPoint, fittedPoint, residual, line, missingCount: rows.length - points.length, subjectX };
 }

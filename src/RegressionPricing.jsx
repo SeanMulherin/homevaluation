@@ -2,6 +2,10 @@ const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD
 const percent = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 const positive = value => Number.isFinite(value) && value > 0;
 const amount = value => Number.isFinite(value) ? money.format(value) : 'Unavailable';
+const signedAmount = value => !Number.isFinite(value) ? 'Unavailable'
+  : value === 0 ? amount(0) : `${value > 0 ? '+' : '−'}${amount(Math.abs(value))}`;
+const signedPercent = value => !Number.isFinite(value) ? 'Unavailable'
+  : value === 0 ? '0%' : `${value > 0 ? '+' : '−'}${percent.format(Math.abs(value))}%`;
 
 export function regressionPriceComparison(modelValue, price) {
   if (!positive(modelValue) || !positive(price)) return null;
@@ -10,12 +14,12 @@ export function regressionPriceComparison(modelValue, price) {
     direction: difference < 0 ? 'below' : difference > 0 ? 'above' : 'equal' };
 }
 
-export default function RegressionPricing({ model, prediction, askingPrice, priceOverride, onPriceChange, idle = false }) {
+export default function RegressionPricing({ model, prediction, comparisonPrice, comparisonLabel = 'House price', priceOverride, onPriceChange, idle = false }) {
   const modelValue = model.ok && positive(prediction.value) ? prediction.value : null;
   const entered = priceOverride.trim() !== '';
-  const comparisonPrice = entered ? Number(priceOverride) : askingPrice;
-  const label = entered ? 'Entered price' : 'Asking price';
-  const comparison = regressionPriceComparison(modelValue, comparisonPrice);
+  const subjectPrice = entered ? Number(priceOverride) : comparisonPrice;
+  const label = entered ? 'Entered price' : comparisonLabel;
+  const comparison = regressionPriceComparison(modelValue, subjectPrice);
   const error = model.ok && Number.isFinite(model.looRmse) ? model.looRmse : null;
   const smallGap = comparison && error != null && Math.abs(comparison.difference) < error;
   const extrapolating = prediction.outside.length > 0;
@@ -24,16 +28,16 @@ export default function RegressionPricing({ model, prediction, askingPrice, pric
     : prediction.missing.length ? `The subject is missing ${prediction.missing.join(', ').toLowerCase()}. A model value cannot be calculated.`
     : !modelValue ? 'The fitted model does not produce a positive value for this home. Revise the factors or neighborhood sample.' : null;
   return <section className="regression-pricing" aria-label="Regression pricing assessment">
-    <h3>What does the model say your home is worth?</h3>
-    <p>The fitted regression estimates the listing price of a home with your property’s reported characteristics.</p>
+    <h3>OLS price estimate and subject-home gap</h3>
+    <p>The ordinary least-squares fit estimates the subject home's price from nearby listings. The gap compares that fitted value with the subject price shown on the charts.</p>
     <div className="regression-pricing-grid" aria-live="polite">
-      <div><span>Model-estimated value</span><strong>{amount(modelValue)}</strong><small>From the selected regression factors</small></div>
-      <div><span>{label}</span><strong>{positive(comparisonPrice) ? amount(comparisonPrice) : 'Not provided'}</strong><small>{entered ? 'Your comparison price' : 'Reported active listing price'}</small></div>
-      <div><span>Dollar difference</span><strong>{comparison ? amount(Math.abs(comparison.difference)) : 'Unavailable'}</strong><small>{comparison ? comparison.direction === 'equal' ? 'Equal to the model estimate' : `${label} ${comparison.direction} the model estimate` : 'Requires a model value and comparison price'}</small></div>
-      <div><span>Percentage difference</span><strong>{comparison ? `${percent.format(Math.abs(comparison.percent))}%` : 'Unavailable'}</strong><small>Difference as a share of the model estimate</small></div>
+      <div><span>OLS trend estimate</span><strong>{amount(modelValue)}</strong><small>At the subject home's reported characteristics</small></div>
+      <div><span>{label}</span><strong>{positive(subjectPrice) ? amount(subjectPrice) : 'Not provided'}</strong><small>{entered ? 'Your comparison price' : label === 'Subject AVM estimate' ? 'RentCast address-level estimate' : 'Reported active listing price'}</small></div>
+      <div><span>Dollar gap</span><strong>{comparison ? signedAmount(comparison.difference) : 'Unavailable'}</strong><small>{comparison ? comparison.direction === 'equal' ? 'Subject price equals the OLS estimate' : `${label} is ${comparison.direction} the OLS estimate` : 'Requires an OLS estimate and subject price'}</small></div>
+      <div><span>Percentage gap</span><strong>{comparison ? signedPercent(comparison.percent) : 'Unavailable'}</strong><small>(Subject price − OLS estimate) ÷ OLS estimate</small></div>
     </div>
     <label className="regression-comparison-input">Asking or purchase price to compare (USD)
-      <input type="number" min="1" step="any" value={priceOverride} placeholder={positive(askingPrice) ? String(askingPrice) : 'Enter a price'} onChange={event => onPriceChange(event.target.value)} disabled={idle} />
+      <input type="number" min="1" step="any" value={priceOverride} placeholder={positive(comparisonPrice) ? String(comparisonPrice) : 'Enter a price'} onChange={event => onPriceChange(event.target.value)} disabled={idle} />
     </label>
     {reason && <p className="regression-pricing-status" role="status">{reason}</p>}
     {modelValue && !comparison && <p className="regression-pricing-status">Enter a positive asking or purchase price to assess it against the fitted value.</p>}

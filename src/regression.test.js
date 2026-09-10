@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FACTORS, factorAvailability, factorPlot, factorValue, fitNeighborhoodModel, neighborhoodHomes, predictHome } from './regression';
+import { FACTORS, defaultModelFactors, factorAvailability, factorPlot, factorValue, fitNeighborhoodModel, neighborhoodHomes, predictHome } from './regression';
 import { dashboardDataFromApi } from './api';
 import snapshot from './default-analysis.json';
 
@@ -36,21 +36,26 @@ describe('neighborhood OLS', () => {
     expect(model.looRmse).toBeCloseTo(Math.sqrt(errors.reduce((a, b) => a + b, 0) / errors.length), 5);
   });
 
-  it('uses real snapshot availability and refuses a subject prediction with missing facts', () => {
+  it('uses real snapshot availability and chooses a subject-compatible default fit', () => {
     const dashboard = dashboardDataFromApi(snapshot, 'fallback');
     const homes = neighborhoodHomes(dashboard.comparables, dashboard.subject).rows;
     const availability = factorAvailability(homes);
     expect(availability.find(({ key }) => key === 'acres').reason).toBe('Not reported');
     expect(availability.find(({ key }) => key === 'baths').reason).toBe('No variation');
-    const selected = availability.filter(({ defaultSelected }) => defaultSelected).map(({ key }) => key);
-    expect(selected).toEqual(['sqft', 'beds', 'yearBuilt', 'active']);
+    const comparableDefaults = availability.filter(({ defaultSelected }) => defaultSelected).map(({ key }) => key);
+    expect(comparableDefaults).toEqual(['sqft', 'beds', 'yearBuilt', 'active']);
+    const selected = defaultModelFactors(homes, dashboard.subject.regressionFacts);
+    expect(selected).toEqual(['yearBuilt']);
     const model = fitNeighborhoodModel(homes, selected);
     expect(model.ok).toBe(true);
     expect(model.n).toBe(15);
     const prediction = predictHome(model, dashboard.subject.regressionFacts);
-    expect(prediction.value).toBeNull();
-    expect(prediction.missing).toContain('Square footage');
+    expect(prediction.value).toBeGreaterThan(0);
+    expect(prediction.missing).toEqual([]);
     expect(prediction.outside).toContain('Year built');
+    const unsupported = predictHome(fitNeighborhoodModel(homes, comparableDefaults), dashboard.subject.regressionFacts);
+    expect(unsupported.value).toBeNull();
+    expect(unsupported.missing).toContain('Square footage');
   });
 
   it('keeps null missing, studio zero valid, and unknown status separate', () => {
@@ -103,19 +108,24 @@ describe('neighborhood OLS', () => {
     expect(cleaned.excluded).toEqual({ subject: 1, duplicates: 2, price: 1 });
   });
 
-  it('plots raw prices and the subject separately, with a conditional multiple-regression line', () => {
+  it('plots the same subject-specific OLS fit and residual used by the price panel', () => {
     const homes = fixture();
     const model = fitNeighborhoodModel(homes, keys);
-    const subject = { ...homes[0], sqft: 9000, acres: null };
+    const subject = { ...homes[0], sqft: 9000 };
     const plot = factorPlot(homes, subject, 750000, FACTORS[0], model);
     expect(plot.points.map(({ y }) => y)).toEqual(homes.map(({ price }) => price));
     expect(plot.subjectPoint).toMatchObject({ x: 9000, y: 750000, isSubject: true });
     for (const point of plot.line) {
-      const baseline = Object.fromEntries(model.factors.map((factor) => [factor.key, factor.center]));
-      const expected = model.intercept + model.coefficients.reduce((sum, c) => sum + c.value * (c.key === 'sqft' ? point.x : baseline[c.key]), 0);
+      const expected = model.intercept + model.coefficients.reduce((sum, c) => sum + c.value * (c.key === 'sqft' ? point.x : factorValue(subject, c.key)), 0);
       expect(point.y).toBeCloseTo(expected);
     }
-    expect(factorPlot(homes, subject, 750000, FACTORS[3], model).subjectPoint).toBeNull();
-    expect(factorPlot(homes, subject, -1, FACTORS[0], model).subjectPoint).toBeNull();
+    expect(plot.fittedPoint.y).toBeCloseTo(predictHome(model, subject).value);
+    expect(plot.residual).toEqual([{ x: 9000, y: plot.fittedPoint.y }, { x: 9000, y: 750000 }]);
+    const missingAcres = factorPlot(homes, { ...subject, acres: null }, 750000, FACTORS[3], model);
+    expect(missingAcres.subjectPoint).toBeNull();
+    expect(missingAcres.line).toEqual([]);
+    const noPrice = factorPlot(homes, subject, -1, FACTORS[0], model);
+    expect(noPrice.subjectPoint).toBeNull();
+    expect(noPrice.residual).toEqual([]);
   });
 });
