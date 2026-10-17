@@ -240,7 +240,7 @@ function App() {
           <button type="submit" disabled={isLoading || !query.trim()}>{isLoading ? <RefreshCw className="is-spinning" size={17} /> : <Search size={17} />}{isLoading ? 'Analyzing' : 'Analyze'}</button>
         </form>
         {isLoading && <p id="analysis-progress" className="analysis-progress" role="status"><Info size={18} aria-hidden="true" /><span>Your analysis is running. This may take 1–2 minutes.</span></p>}
-        {!hasResults && loadError && <p className="analysis-request-error" role="alert">{loadError} Please try again.</p>}
+        {!hasResults && loadError && <p className="analysis-request-error" role="alert">{loadError}</p>}
         </div>
         {notice && <div className="toast" role="status"><Check size={16} />{notice}</div>}
       </section>
@@ -350,3 +350,4 @@ function App() {
 }
 
 export default App;
+
