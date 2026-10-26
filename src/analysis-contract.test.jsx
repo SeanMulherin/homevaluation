@@ -35,3 +35,12 @@ it('retains nearby homes when the subject type is unknown and never plots a city
   expect(markup).toContain('24 / 24');
   expect(markup).toContain('Subject AVM estimate: <strong>Unavailable');
 });
+
+it('discloses the regression price cap without replacing reported listing prices', () => {
+  const dashboard = dashboardDataFromApi(fixture, 'Subject');
+  const comparables = dashboard.neighborhood.listings.map((home, i) => i === 0 ? { ...home, price: 12000000 } : home);
+  const markup = renderToStaticMarkup(<NeighborhoodRegression subject={dashboard.subject} comparables={comparables} source={dashboard.neighborhood} />);
+
+  expect(markup).toContain('1 neighborhood listing price above $3,000,000 is top-coded at $3,000,000');
+  expect(markup).toContain('$12,000,000');
+});

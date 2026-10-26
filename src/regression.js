@@ -1,4 +1,10 @@
 // Ordinary least squares in dollars. No AVM estimates or display defaults enter training.
+export const REGRESSION_PRICE_CAP = 3_000_000;
+
+export function regressionPrice(value) {
+  return Number.isFinite(value) && value > 0 ? Math.min(value, REGRESSION_PRICE_CAP) : null;
+}
+
 export const FACTORS = [
   { key: 'sqft', label: 'Square footage', axis: 'Living area (sqft)', unit: 'per 100 sqft', increment: 100 },
   { key: 'beds', label: 'Bedrooms', axis: 'Bedrooms', unit: 'per bedroom', increment: 1 },
@@ -72,7 +78,17 @@ export function fitNeighborhoodModel(rows, selectedKeys) {
   const omitted = selected.filter((factor) => factor.reason).map(({ key, label, reason }) => ({ key, label, reason }));
   const candidates = selected.filter((factor) => !factor.reason);
   const training = rows.filter((home) => Number.isFinite(home.price) && home.price > 0 && candidates.every(({ key }) => factorValue(home, key) != null));
-  const result = { ok: false, rows: training, n: training.length, missingCount: rows.length - training.length, omitted, factors: [], coefficients: [] };
+  const result = {
+    ok: false,
+    rows: training,
+    n: training.length,
+    missingCount: rows.length - training.length,
+    omitted,
+    factors: [],
+    coefficients: [],
+    priceCap: REGRESSION_PRICE_CAP,
+    cappedCount: training.filter((home) => home.price > REGRESSION_PRICE_CAP).length,
+  };
   if (!candidates.length) return { ...result, reason: 'Select at least one factor with reported values that vary across homes.' };
   if (training.length < 8) return { ...result, reason: `Only ${training.length} complete homes. At least 8 are required; deselect sparse factors or broaden the listing filter.` };
 
@@ -113,7 +129,7 @@ export function fitNeighborhoodModel(rows, selectedKeys) {
   if (!factors.length) return { ...result, reason: 'Selected factors do not vary in the complete homes.' };
   if (n - p < 3) return { ...result, factors, reason: `${n} complete homes cannot support ${factors.length} factors with an intercept and at least 3 residual degrees of freedom. Select fewer factors.` };
 
-  const y = training.map((home) => home.price);
+  const y = training.map((home) => regressionPrice(home.price));
   const beta = q.map((column) => dot(column, y));
   for (let j = p - 1; j >= 0; j -= 1) {
     for (let k = j + 1; k < p; k += 1) beta[j] -= r[j][k] * beta[k];
@@ -164,7 +180,14 @@ export function predictHome(model, home) {
 export function factorPlot(rows, subject, subjectPrice, factor, model) {
   const points = rows.flatMap((home) => {
     const x = factorValue(home, factor.key);
-    return x == null ? [] : [{ ...home, x, y: home.price }];
+    const y = regressionPrice(home.price);
+    return x == null || y == null ? [] : [{
+      ...home,
+      x,
+      y,
+      reportedPrice: home.price,
+      priceCapped: home.price > REGRESSION_PRICE_CAP,
+    }];
   });
   const subjectX = factorValue(subject, factor.key);
   const subjectPoint = subjectX != null && Number.isFinite(subjectPrice) && subjectPrice > 0
