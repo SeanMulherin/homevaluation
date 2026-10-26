@@ -1,8 +1,9 @@
 // Ordinary least squares in dollars. No AVM estimates or display defaults enter training.
-export const REGRESSION_PRICE_CAP = 3_000_000;
+// This model is intentionally scoped to listings priced at or below $2 million.
+export const REGRESSION_PRICE_LIMIT = 2_000_000;
 
-export function regressionPrice(value) {
-  return Number.isFinite(value) && value > 0 ? Math.min(value, REGRESSION_PRICE_CAP) : null;
+export function isRegressionPriceEligible(value) {
+  return Number.isFinite(value) && value > 0 && value <= REGRESSION_PRICE_LIMIT;
 }
 
 export const FACTORS = [
@@ -73,21 +74,23 @@ const dot = (a, b) => a.reduce((sum, value, i) => sum + value * b[i], 0);
 const mean = (a) => a.reduce((sum, value) => sum + value, 0) / a.length;
 
 export function fitNeighborhoodModel(rows, selectedKeys) {
-  const availability = factorAvailability(rows);
+  const eligible = rows.filter((home) => isRegressionPriceEligible(home.price));
+  const availability = factorAvailability(eligible);
   const selected = availability.filter((factor) => selectedKeys.includes(factor.key));
   const omitted = selected.filter((factor) => factor.reason).map(({ key, label, reason }) => ({ key, label, reason }));
   const candidates = selected.filter((factor) => !factor.reason);
-  const training = rows.filter((home) => Number.isFinite(home.price) && home.price > 0 && candidates.every(({ key }) => factorValue(home, key) != null));
+  const training = eligible.filter((home) => candidates.every(({ key }) => factorValue(home, key) != null));
   const result = {
     ok: false,
     rows: training,
     n: training.length,
-    missingCount: rows.length - training.length,
+    eligibleCount: eligible.length,
+    missingCount: eligible.length - training.length,
     omitted,
     factors: [],
     coefficients: [],
-    priceCap: REGRESSION_PRICE_CAP,
-    cappedCount: training.filter((home) => home.price > REGRESSION_PRICE_CAP).length,
+    priceLimit: REGRESSION_PRICE_LIMIT,
+    excludedPriceCount: rows.length - eligible.length,
   };
   if (!candidates.length) return { ...result, reason: 'Select at least one factor with reported values that vary across homes.' };
   if (training.length < 8) return { ...result, reason: `Only ${training.length} complete homes. At least 8 are required; deselect sparse factors or broaden the listing filter.` };
@@ -129,7 +132,7 @@ export function fitNeighborhoodModel(rows, selectedKeys) {
   if (!factors.length) return { ...result, reason: 'Selected factors do not vary in the complete homes.' };
   if (n - p < 3) return { ...result, factors, reason: `${n} complete homes cannot support ${factors.length} factors with an intercept and at least 3 residual degrees of freedom. Select fewer factors.` };
 
-  const y = training.map((home) => regressionPrice(home.price));
+  const y = training.map((home) => home.price);
   const beta = q.map((column) => dot(column, y));
   for (let j = p - 1; j >= 0; j -= 1) {
     for (let k = j + 1; k < p; k += 1) beta[j] -= r[j][k] * beta[k];
@@ -154,7 +157,8 @@ export function fitNeighborhoodModel(rows, selectedKeys) {
 // Add default factors only while the complete-case fit remains estimable; if none of
 // the usual defaults are observed for the subject, fall back to its best-covered factor.
 export function defaultModelFactors(rows, home) {
-  const availability = factorAvailability(rows);
+  const eligible = rows.filter((row) => isRegressionPriceEligible(row.price));
+  const availability = factorAvailability(eligible);
   const supported = availability.filter(({ key, reason }) => !reason && factorValue(home, key) != null);
   const preferred = supported.filter(({ defaultSelected }) => defaultSelected);
   const candidates = preferred.length
@@ -179,14 +183,12 @@ export function predictHome(model, home) {
 
 export function factorPlot(rows, subject, subjectPrice, factor, model) {
   const points = rows.flatMap((home) => {
+    if (!isRegressionPriceEligible(home.price)) return [];
     const x = factorValue(home, factor.key);
-    const y = regressionPrice(home.price);
-    return x == null || y == null ? [] : [{
+    return x == null ? [] : [{
       ...home,
       x,
-      y,
-      reportedPrice: home.price,
-      priceCapped: home.price > REGRESSION_PRICE_CAP,
+      y: home.price,
     }];
   });
   const subjectX = factorValue(subject, factor.key);
@@ -214,5 +216,6 @@ export function factorPlot(rows, subject, subjectPrice, factor, model) {
   const residual = subjectPoint && fittedPoint
     ? [{ x: subjectX, y: fittedPoint.y }, { x: subjectX, y: subjectPoint.y }]
     : [];
-  return { points, subjectPoint, fittedPoint, residual, line, missingCount: rows.length - points.length, subjectX };
+  const eligibleCount = rows.filter((home) => isRegressionPriceEligible(home.price)).length;
+  return { points, subjectPoint, fittedPoint, residual, line, missingCount: eligibleCount - points.length, subjectX };
 }

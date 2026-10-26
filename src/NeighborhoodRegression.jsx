@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { CartesianGrid, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
 import { sourceDate } from './DataFreshness';
 import RegressionPricing from './RegressionPricing';
-import { FACTORS, REGRESSION_PRICE_CAP, defaultModelFactors, factorAvailability, factorPlot, factorValue, fitNeighborhoodModel, neighborhoodHomes, predictHome, regressionPrice } from './regression';
+import { FACTORS, REGRESSION_PRICE_LIMIT, defaultModelFactors, factorAvailability, factorPlot, factorValue, fitNeighborhoodModel, isRegressionPriceEligible, neighborhoodHomes, predictHome } from './regression';
 
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const compact = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 });
@@ -18,8 +18,7 @@ function FactorTooltip({ active, payload, factor, priceLabel }) {
   if (!point) return null;
   return <div className="chart-tooltip regression-tooltip">
     <strong>{point.fullAddress || point.address}</strong>
-    <span>{point.isSubject ? priceLabel : point.priceCapped ? 'Model price' : 'Listed price'}: {showMoney(point.y)}</span>
-    {!point.isSubject && point.priceCapped && <span>Reported price: {showMoney(point.reportedPrice)} · capped at {showMoney(REGRESSION_PRICE_CAP)}</span>}
+    <span>{point.isSubject ? priceLabel : 'Listed price'}: {showMoney(point.y)}</span>
     <span>{factor.label}: {formatX(factor, point.x)}</span>
     <span>{point.status || 'Unknown status'}{point.propertyType ? ` · ${point.propertyType}` : ''}</span>
     {!point.isSubject && <span>Last seen active: {sourceDate(point.lastSeenDate)}</span>}
@@ -30,7 +29,7 @@ function FactorChart({ factor, plot, yDomain, priceLabel, showLine }) {
   const chartId = `factor-${factor.key}`;
   return <figure className="factor-figure" aria-labelledby={chartId}>
     <figcaption><h3 id={chartId}>Price vs. {factor.label.toLowerCase()}</h3>
-      <p>{plot.points.length} nearby homes{plot.missingCount > 0 ? ` · ${plot.missingCount} missing this factor` : ''}</p>
+      <p>{plot.points.length} eligible nearby homes{plot.missingCount > 0 ? ` · ${plot.missingCount} missing this factor` : ''}</p>
     </figcaption>
     {plot.points.length || plot.subjectPoint ? <div className="factor-chart">
       <ResponsiveContainer width="100%" height="100%" minWidth={0}>
@@ -68,14 +67,14 @@ export default function NeighborhoodRegression({ subject, comparables, source })
   const subjectPrice = priceOverride.trim() ? Number(priceOverride) : baselinePrice;
   const priceLabel = priceOverride.trim() ? 'Entered subject price' : hasListingPrice ? 'Subject asking price' : 'Subject AVM estimate';
   const rows = neighborhood.rows;
-  const availability = useMemo(() => factorAvailability(rows), [rows]);
+  const eligibleRows = useMemo(() => rows.filter((home) => isRegressionPriceEligible(home.price)), [rows]);
+  const availability = useMemo(() => factorAvailability(eligibleRows), [eligibleRows]);
   const model = useMemo(() => fitNeighborhoodModel(rows, selected), [rows, selected]);
   const prediction = predictHome(model, profile);
   const plottedFactors = FACTORS.filter(({ key }) => key !== 'distance' || selected.includes(key));
   const plots = plottedFactors.map((factor) => factorPlot(rows, profile, subjectPrice, factor, model));
-  const cappedCount = rows.filter((home) => home.price > REGRESSION_PRICE_CAP).length;
   const prices = [
-    ...rows.map((home) => regressionPrice(home.price)).filter((price) => Number.isFinite(price)),
+    ...eligibleRows.map((home) => home.price),
     ...(Number.isFinite(subjectPrice) && subjectPrice > 0 ? [subjectPrice] : []),
     ...(showLine ? plots.flatMap((plot) => plot.line.map((point) => point.y)) : []),
   ];
@@ -84,7 +83,7 @@ export default function NeighborhoodRegression({ subject, comparables, source })
   const padding = Math.max((hi - lo) * 0.1, hi * 0.03, 1);
   const yDomain = [
     Math.max(0, lo - padding),
-    cappedCount > 0 ? REGRESSION_PRICE_CAP : hi + padding,
+    Math.min(REGRESSION_PRICE_LIMIT, hi + padding),
   ];
   const trainingSet = new Set(model.rows);
   const otherTypes = rows.filter((home) => home.propertyType !== subject.propertyType).length;
@@ -120,16 +119,16 @@ export default function NeighborhoodRegression({ subject, comparables, source })
         const reason = factor.reason || (subjectMissing ? 'Not reported for subject home' : null);
         return <label key={factor.key} className={reason ? 'factor-unavailable' : ''}>
           <input type="checkbox" checked={selected.includes(factor.key)} disabled={Boolean(reason) && !selected.includes(factor.key)} onChange={(event) => setSelected(event.target.checked ? [...selected, factor.key] : selected.filter((key) => key !== factor.key))} />
-          <span>{factor.label}<small>{reason || `${factor.count}/${rows.length} reported`}</small></span>
+          <span>{factor.label}<small>{reason || `${factor.count}/${eligibleRows.length} eligible homes reported`}</small></span>
         </label>;
       })}
     </fieldset>
     {source?.status !== 'ok' && source?.status !== 'idle' && <p className="regression-note" role="status">{source?.error || 'Neighborhood listings are not available in this response. Refresh to retrieve them from the updated data service.'} The AVM’s selected comparables are not substituted for a neighborhood search.</p>}
     {source?.has_more && <p className="regression-note">The search reached its retrieval limit. This is a partial neighborhood sample; reduce the radius to narrow the search.</p>}
     {otherTypes > 0 && <p className="regression-note">{otherTypes} homes have a different or unknown property type from the subject ({subject.propertyType}).</p>}
-    {cappedCount > 0 && <p className="regression-note">{cappedCount} neighborhood listing {cappedCount === 1 ? 'price' : 'prices'} above {showMoney(REGRESSION_PRICE_CAP)} {cappedCount === 1 ? 'is' : 'are'} top-coded at {showMoney(REGRESSION_PRICE_CAP)} for the regression and figures. Reported prices remain unchanged in the property table.</p>}
+    {model.excludedPriceCount > 0 && <p className="regression-note">{model.excludedPriceCount} of {rows.length} neighborhood {model.excludedPriceCount === 1 ? 'listing' : 'listings'} above {showMoney(REGRESSION_PRICE_LIMIT)} {model.excludedPriceCount === 1 ? 'is' : 'are'} excluded from this sub-{compact.format(REGRESSION_PRICE_LIMIT)} OLS model and its figures. Reported prices remain unchanged in the property table.</p>}
     <div className="regression-stats" aria-label="Regression results" aria-live="polite">
-      <div><span>{model.ok ? 'Homes used in model' : 'Complete homes for model'}</span><strong>{model.n} / {rows.length}</strong><small>{model.missingCount} missing selected factors</small></div>
+      <div><span>{model.ok ? 'Homes used in model' : 'Complete homes for model'}</span><strong>{model.n} / {model.eligibleCount} eligible</strong><small>{model.excludedPriceCount} above {compact.format(REGRESSION_PRICE_LIMIT)} excluded · {model.missingCount} missing selected factors</small></div>
       <div><span>Subject model prediction</span><strong>{showMoney(prediction.value > 0 ? prediction.value : null)}</strong><small>Fitted from nearby listed prices</small></div>
       <div><span>Adjusted R²</span><strong>{model.ok ? showR2(model.adjustedRSquared) : 'Unavailable'}</strong><small>Fit adjusted for number of factors</small></div>
       <div><span>Leave-one-out RMSE</span><strong>{model.ok ? showMoney(model.looRmse) : 'Unavailable'}</strong><small>Prediction error when holding out each home</small></div>
@@ -138,6 +137,7 @@ export default function NeighborhoodRegression({ subject, comparables, source })
     {omitted.length > 0 && <p className="regression-note">Omitted from this fit: {omitted.join('; ')}.</p>}
     {prediction.missing.length > 0 && <p className="regression-note">Subject prediction unavailable: missing {prediction.missing.join(', ').toLowerCase()}. Display defaults are not used as observed facts.</p>}
     {prediction.outside.length > 0 && <p className="regression-note">Subject outside the fitted neighborhood range for {prediction.outside.join(', ').toLowerCase()}. Any prediction extrapolates beyond these homes.</p>}
+    {Number.isFinite(subjectPrice) && subjectPrice > REGRESSION_PRICE_LIMIT && <p className="regression-note">The subject comparison price is above this model's {showMoney(REGRESSION_PRICE_LIMIT)} price scope; its marker may fall outside the figures.</p>}
     {model.ok && model.n < 30 && <p className="regression-context">Small sample ({model.n} homes, {model.factors.length} factors). Coefficients can be sensitive to individual listings.</p>}
     <RegressionPricing model={model} prediction={prediction} comparisonPrice={baselinePrice} comparisonLabel={priceLabel}
       priceOverride={priceOverride} onPriceChange={setPriceOverride} idle={source?.status === 'idle'} />
@@ -146,16 +146,16 @@ export default function NeighborhoodRegression({ subject, comparables, source })
       <label className="regression-check"><input type="checkbox" checked={showLine} onChange={(event) => setShowLine(event.target.checked)} />Show adjusted model lines</label>
     </div>
     <div className="regression-legend" aria-label="Figure legend"><span><i className="legend-active" />Active</span><span><i className="legend-inactive" />Inactive</span><span><i className="legend-unknown" />Unknown status</span><span><i className="legend-subject" />Subject price</span>{showLine && <><span><i className="legend-fit" />OLS estimate</span><span><i className="legend-line" />Subject-specific OLS line</span></>}</div>
-    <p className="regression-context">Every figure uses the same price axis. Comparable points use the {showMoney(REGRESSION_PRICE_CAP)} top-code; the subject marker keeps its actual comparison price. Each dashed line holds the other fitted factors at the subject home's values; the vertical red segment is the above-or-below price gap reported in the estimator. Overlapping points may represent multiple homes.</p>
+    <p className="regression-context">Every figure uses the same price axis and shows only comparable homes priced at or below {showMoney(REGRESSION_PRICE_LIMIT)}; the subject marker keeps its actual comparison price. Each dashed line holds the other fitted factors at the subject home's values; the vertical red segment is the above-or-below price gap reported in the estimator. Overlapping points may represent multiple homes.</p>
     <div className="factor-scroll" role="region" aria-label="Property factor figures, scroll horizontally" tabIndex={0}>{plottedFactors.map((factor, i) => <FactorChart key={factor.key} factor={factor} plot={plots[i]} yDomain={yDomain} priceLabel={priceLabel} showLine={showLine} />)}</div>
     {model.ok && <details className="regression-details"><summary>Model coefficients and fit details</summary>
-      <p>Ordinary least squares with an intercept, using complete observations and excluding the subject. Neighborhood listing prices above {showMoney(REGRESSION_PRICE_CAP)} are fitted at the cap. Effects below hold other factors fixed; they describe associations, not causal effects.</p>
+      <p>Ordinary least squares with an intercept, using complete observations priced at or below {showMoney(REGRESSION_PRICE_LIMIT)} and excluding the subject. Effects below hold other factors fixed; they describe associations, not causal effects.</p>
       <div className="table-wrap"><table><thead><tr><th>Factor</th><th>Change in fitted price</th><th>Unit</th></tr></thead><tbody>{model.coefficients.map((factor) => <tr key={factor.key}><td>{factor.label}</td><td>{showMoney(factor.value * factor.increment)}</td><td>{factor.unit}</td></tr>)}</tbody></table></div>
       <p>Intercept: {showMoney(model.intercept)} · R²: {showR2(model.rSquared)} · In-sample RMSE: {showMoney(model.rmse)} · Residual degrees of freedom: {model.degreesOfFreedom}. Leave-one-out error holds the selected factor set fixed.</p>
     </details>}
     <details className="regression-details"><summary>View homes behind the figures</summary>
-      <p>The plots use each home with a known value for that figure. The regression uses homes with every included factor reported and top-codes its price at {showMoney(REGRESSION_PRICE_CAP)} while preserving the reported price below. {neighborhood.excluded.subject} subject records and {neighborhood.excluded.duplicates} repeated property records excluded; {neighborhood.excluded.price} records without a valid price excluded.</p>
-      <div className="table-wrap"><table><thead><tr><th>Property</th><th>Listed price</th><th>Status</th><th>Sqft</th><th>Beds</th><th>Baths</th><th>Acres</th><th>Year built</th><th>Last seen active</th><th>Model</th></tr></thead><tbody>{rows.map((home, i) => <tr key={home.id || `${home.fullAddress}-${i}`}><td>{home.fullAddress || home.address}</td><td>{showMoney(home.price)}</td><td>{home.status}</td>{['sqft', 'beds', 'baths', 'acres', 'yearBuilt'].map((key) => <td key={key}>{home[key] == null ? 'Unknown' : key === 'yearBuilt' ? home[key] : decimal.format(home[key])}</td>)}<td>{sourceDate(home.lastSeenDate)}</td><td>{model.ok ? trainingSet.has(home) ? 'Included' : 'Missing factors' : 'Not fitted'}</td></tr>)}</tbody></table></div>
+      <p>The plots and regression use homes priced at or below {showMoney(REGRESSION_PRICE_LIMIT)}; the regression additionally requires every included factor. Reported prices remain unchanged below. {neighborhood.excluded.subject} subject records and {neighborhood.excluded.duplicates} repeated property records excluded; {neighborhood.excluded.price} records without a valid price excluded.</p>
+      <div className="table-wrap"><table><thead><tr><th>Property</th><th>Listed price</th><th>Status</th><th>Sqft</th><th>Beds</th><th>Baths</th><th>Acres</th><th>Year built</th><th>Last seen active</th><th>Model</th></tr></thead><tbody>{rows.map((home, i) => <tr key={home.id || `${home.fullAddress}-${i}`}><td>{home.fullAddress || home.address}</td><td>{showMoney(home.price)}</td><td>{home.status}</td>{['sqft', 'beds', 'baths', 'acres', 'yearBuilt'].map((key) => <td key={key}>{home[key] == null ? 'Unknown' : key === 'yearBuilt' ? home[key] : decimal.format(home[key])}</td>)}<td>{sourceDate(home.lastSeenDate)}</td><td>{home.price > REGRESSION_PRICE_LIMIT ? `Above ${compact.format(REGRESSION_PRICE_LIMIT)} limit` : model.ok ? trainingSet.has(home) ? 'Included' : 'Missing factors' : 'Not fitted'}</td></tr>)}</tbody></table></div>
     </details>
   </section>;
 }

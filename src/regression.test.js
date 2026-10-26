@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FACTORS, REGRESSION_PRICE_CAP, defaultModelFactors, factorAvailability, factorPlot, factorValue, fitNeighborhoodModel, neighborhoodHomes, predictHome, regressionPrice } from './regression';
+import { FACTORS, REGRESSION_PRICE_LIMIT, defaultModelFactors, factorAvailability, factorPlot, factorValue, fitNeighborhoodModel, isRegressionPriceEligible, neighborhoodHomes, predictHome } from './regression';
 import { dashboardDataFromApi } from './api';
 import snapshot from './default-analysis.json';
 
@@ -26,11 +26,12 @@ describe('neighborhood OLS', () => {
     expect(predictHome(model, homes[5]).value).toBeCloseTo(homes[5].price, 5);
   });
 
-  it('top-codes luxury outliers for fitting and plots while preserving reported prices', () => {
+  it('excludes listings above the price limit from fitting and plots while preserving reported prices', () => {
     const normal = Array.from({ length: 200 }, (_, i) => {
       const beds = 1 + (i % 5);
       return { id: `normal-${i}`, fullAddress: `${i} Normal St`, beds, price: 250000 + beds * 150000 + (i % 7) * 5000 };
     });
+    normal[0] = { ...normal[0], price: REGRESSION_PRICE_LIMIT };
     const luxury = Array.from({ length: 18 }, (_, i) => ({
       id: `luxury-${i}`, fullAddress: `${i} Luxury St`, beds: 5, price: 12000000 + i * 100000,
     }));
@@ -41,18 +42,17 @@ describe('neighborhood OLS', () => {
     const prediction = predictHome(model, subject);
     const plot = factorPlot(homes, subject, 585000, FACTORS.find(({ key }) => key === 'beds'), model);
 
-    expect(regressionPrice(REGRESSION_PRICE_CAP - 1)).toBe(REGRESSION_PRICE_CAP - 1);
-    expect(regressionPrice(REGRESSION_PRICE_CAP)).toBe(REGRESSION_PRICE_CAP);
-    expect(regressionPrice(REGRESSION_PRICE_CAP + 1)).toBe(REGRESSION_PRICE_CAP);
-    expect(regressionPrice(0)).toBeNull();
-    expect(model).toMatchObject({ ok: true, priceCap: REGRESSION_PRICE_CAP, cappedCount: 18 });
+    expect(isRegressionPriceEligible(REGRESSION_PRICE_LIMIT - 1)).toBe(true);
+    expect(isRegressionPriceEligible(REGRESSION_PRICE_LIMIT)).toBe(true);
+    expect(isRegressionPriceEligible(REGRESSION_PRICE_LIMIT + 1)).toBe(false);
+    expect(isRegressionPriceEligible(0)).toBe(false);
+    expect(model).toMatchObject({ ok: true, priceLimit: REGRESSION_PRICE_LIMIT, eligibleCount: 200, excludedPriceCount: 18, n: 200 });
     expect(prediction.value).toBeGreaterThan(0);
     expect(homes.map(({ price }) => price)).toEqual(reportedPrices);
-    expect(Math.max(...plot.points.map(({ y }) => y))).toBe(REGRESSION_PRICE_CAP);
-    expect(plot.points.find(({ priceCapped }) => priceCapped)).toMatchObject({
-      y: REGRESSION_PRICE_CAP,
-      reportedPrice: 12000000,
-    });
+    expect(model.rows).toEqual(normal);
+    expect(plot.points).toHaveLength(normal.length);
+    expect(plot.points.some(({ id }) => id.startsWith('luxury-'))).toBe(false);
+    expect(Math.max(...plot.points.map(({ y }) => y))).toBe(REGRESSION_PRICE_LIMIT);
     expect(plot.line).toHaveLength(2);
     expect(plot.line.every(({ y }) => Number.isFinite(y) && y > 0)).toBe(true);
     expect(plot.fittedPoint.y).toBeCloseTo(prediction.value);
